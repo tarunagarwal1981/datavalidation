@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import psycopg2
+from sqlalchemy import create_engine
 from datetime import datetime, timedelta
 
 # Define the column names based on your table structure
@@ -20,45 +20,36 @@ VESSEL_PARTICULARS_TABLE_NAME = 'vessel_particulars'  # Table name containing ve
 # Sidebar information
 st.sidebar.write("Data validation happened for the last 6 months.")
 
-# Database connection details
+# Database connection details (using SQLAlchemy)
 koyeb_host = "ep-rapid-wind-a1jdywyi.ap-southeast-1.pg.koyeb.app"
 koyeb_database = "koyebdb"
 koyeb_user = "koyeb-adm"
 koyeb_password = "YBK7jd6wLaRD"
 koyeb_port = "5432"
 
-# Connect to the PostgreSQL database
+# Function to create the SQLAlchemy engine
 @st.cache_resource
-def get_db_connection():
-    conn = psycopg2.connect(
-        host=koyeb_host,
-        database=koyeb_database,
-        user=koyeb_user,
-        password=koyeb_password,
-        port=koyeb_port
-    )
-    return conn
+def get_db_engine():
+    db_url = f"postgresql+psycopg2://{koyeb_user}:{koyeb_password}@{koyeb_host}:{koyeb_port}/{koyeb_database}"
+    engine = create_engine(db_url)
+    return engine
 
 # Fetch the data for the last 6 months from the vessel_performance_summary table
-def fetch_vessel_performance_data():
-    conn = get_db_connection()
+def fetch_vessel_performance_data(engine):
     query = """
     SELECT * FROM vessel_performance_summary
     WHERE reportdate >= %s;
     """
     six_months_ago = datetime.now() - timedelta(days=180)
-    df = pd.read_sql_query(query, conn, params=[six_months_ago])
-    conn.close()
+    df = pd.read_sql_query(query, engine, params=[six_months_ago])
     return df
 
 # Fetch vessel type information from the vessel_particulars table
-def fetch_vessel_type_data():
-    conn = get_db_connection()
+def fetch_vessel_type_data(engine):
     query = """
     SELECT vessel_name, vessel_type FROM vessel_particulars;
     """
-    vessel_type_df = pd.read_sql_query(query, conn)
-    conn.close()
+    vessel_type_df = pd.read_sql_query(query, engine)
     return vessel_type_df
 
 # Merge vessel type data with vessel performance data
@@ -147,26 +138,33 @@ st.title('ME Consumption Validation')
 
 # Button to validate data
 if st.button('Validate Data'):
-    # Fetch data from vessel performance and particulars tables
-    df_performance = fetch_vessel_performance_data()
-    df_particulars = fetch_vessel_type_data()
+    # Create the database engine using SQLAlchemy
+    engine = get_db_engine()
 
-    # Merge vessel type from particulars into the performance data
-    df = merge_vessel_type(df_performance, df_particulars)
-    
-    if not df.empty:
-        # Validate the data for each vessel group
-        validation_results = validate_data(df)
+    try:
+        # Fetch data from vessel performance and particulars tables
+        df_performance = fetch_vessel_performance_data(engine)
+        df_particulars = fetch_vessel_type_data(engine)
+
+        # Merge vessel type from particulars into the performance data
+        df = merge_vessel_type(df_performance, df_particulars)
         
-        if validation_results:
-            result_df = pd.DataFrame(validation_results)
-            st.write("Validation Results:")
-            st.dataframe(result_df)
+        if not df.empty:
+            # Validate the data for each vessel group
+            validation_results = validate_data(df)
             
-            # Option to download results as CSV
-            csv = result_df.to_csv(index=False)
-            st.download_button(label="Download validation report as CSV", data=csv, file_name='validation_report.csv', mime='text/csv')
+            if validation_results:
+                result_df = pd.DataFrame(validation_results)
+                st.write("Validation Results:")
+                st.dataframe(result_df)
+                
+                # Option to download results as CSV
+                csv = result_df.to_csv(index=False)
+                st.download_button(label="Download validation report as CSV", data=csv, file_name='validation_report.csv', mime='text/csv')
+            else:
+                st.write("All data passed the validation checks!")
         else:
-            st.write("All data passed the validation checks!")
-    else:
-        st.write("No data found for the last 6 months.")
+            st.write("No data found for the last 6 months.")
+    
+    except Exception as e:
+        st.error(f"An error occurred: {str(e)}")
