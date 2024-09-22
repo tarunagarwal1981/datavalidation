@@ -26,13 +26,16 @@ st.sidebar.write("Data validation happened for the last 6 months.")
 supabase_host = "aws-0-ap-south-1.pooler.supabase.com"
 supabase_database = "postgres"
 supabase_user = "postgres.conrxbcvuogbzfysomov"
-supabase_password = urllib.parse.quote("wXAryCC8@iwNvj#")  # Encode special characters in the password
+supabase_password = "wXAryCC8@iwNvj#"  # Your original password
 supabase_port = "6543"
+
+# URL encode the password
+encoded_password = urllib.parse.quote(supabase_password)
 
 # Function to create the SQLAlchemy engine using Supabase credentials
 @st.cache_resource
 def get_db_engine():
-    db_url = f"postgresql+psycopg2://{supabase_user}:{supabase_password}@{supabase_host}:{supabase_port}/{supabase_database}"
+    db_url = f"postgresql+psycopg2://{supabase_user}:{encoded_password}@{supabase_host}:{supabase_port}/{supabase_database}"
     engine = create_engine(db_url)
     return engine
 
