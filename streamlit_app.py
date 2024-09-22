@@ -37,13 +37,18 @@ def get_db_connection():
     )
     return conn
 
-# Fetch the data for the last 6 months
+# Fetch the data for the last 6 months with vessel_type from vessel_particulars
 def fetch_data():
     conn = get_db_connection()
+    
+    # SQL Query that joins vessel_performance_summary and vessel_particulars based on vessel_name
     query = """
-    SELECT * FROM vessel_performance_summary
-    WHERE reportdate >= %s;
+    SELECT sf.*, vp.vessel_type
+    FROM vessel_performance_summary sf
+    LEFT JOIN vessel_particulars vp ON sf.vessel_name = vp.vessel_name
+    WHERE sf.reportdate >= %s;
     """
+    
     six_months_ago = datetime.now() - timedelta(days=180)
     df = pd.read_sql_query(query, conn, params=[six_months_ago])
     conn.close()
@@ -57,7 +62,7 @@ def check_required_columns(df):
     missing_columns = [col for col in required_columns if col not in df.columns]
     return missing_columns
 
-# Run the validation logic on the fetched data
+# Run the validation logic for each vessel group
 def validate_data(df):
     validation_results = []
     
@@ -78,45 +83,49 @@ def validate_data(df):
         })
         return validation_results
 
-    for index, row in df.iterrows():
-        failure_reason = []
-        try:
-            me_consumption = row[ME_CONSUMPTION_COL]
-            me_power = row[ME_POWER_COL]
-            me_rpm = row[ME_RPM_COL]
-            vessel_type = row[VESSEL_TYPE_COL]
-            run_hours = row[RUN_HOURS_COL]
-            current_load = row[CURRENT_LOAD_COL]
-            current_speed = row[CURRENT_SPEED_COL]
-            streaming_hours = row[STREAMING_HOURS_COL]
-        except KeyError as e:
-            failure_reason.append(f"Missing required column: {str(e)}")
-            continue
-        
-        # Apply validation logic
-        if me_consumption < 0 or me_consumption > 300:
-            failure_reason.append("ME Consumption out of range")
-        
-        if me_consumption <= (250 / me_power * run_hours * 10**6):
-            failure_reason.append("ME Consumption too high for the Reported power")
-        
-        if me_rpm > 0 and me_consumption == 0:
-            failure_reason.append("ME Consumption cannot be zero when underway")
-        
-        if vessel_type == "container" and me_consumption > 150:
-            failure_reason.append("ME Consumption too high for container vessel")
-        elif vessel_type != "container" and me_consumption > 60:
-            failure_reason.append("ME Consumption too high for non-container vessel")
-        
-        # Add other validation logics from your file here (e.g., avg_consumption, expected_consumption, etc.)
-        
-        # Collect the result if any validation failed
-        if failure_reason:
-            validation_results.append({
-                'Vessel Name': row[VESSEL_NAME_COL],
-                'Report Date': row[REPORT_DATE_COL],
-                'Remarks': ", ".join(failure_reason)
-            })
+    # Group by vessel name and apply validation to each group
+    grouped = df.groupby(VESSEL_NAME_COL)
+
+    for vessel_name, vessel_data in grouped:
+        for index, row in vessel_data.iterrows():
+            failure_reason = []
+            try:
+                me_consumption = row[ME_CONSUMPTION_COL]
+                me_power = row[ME_POWER_COL]
+                me_rpm = row[ME_RPM_COL]
+                vessel_type = row[VESSEL_TYPE_COL]  # Retrieved from vessel_particulars
+                run_hours = row[RUN_HOURS_COL]
+                current_load = row[CURRENT_LOAD_COL]
+                current_speed = row[CURRENT_SPEED_COL]
+                streaming_hours = row[STREAMING_HOURS_COL]
+            except KeyError as e:
+                failure_reason.append(f"Missing required column: {str(e)}")
+                continue
+            
+            # Apply validation logic within the vessel group
+            if me_consumption < 0 or me_consumption > 300:
+                failure_reason.append("ME Consumption out of range")
+            
+            if me_consumption <= (250 / me_power * run_hours * 10**6):
+                failure_reason.append("ME Consumption too high for the Reported power")
+            
+            if me_rpm > 0 and me_consumption == 0:
+                failure_reason.append("ME Consumption cannot be zero when underway")
+            
+            if vessel_type == "container" and me_consumption > 150:
+                failure_reason.append("ME Consumption too high for container vessel")
+            elif vessel_type != "container" and me_consumption > 60:
+                failure_reason.append("ME Consumption too high for non-container vessel")
+            
+            # Add other validation logics from your file here (e.g., avg_consumption, expected_consumption, etc.)
+            
+            # Collect the result if any validation failed
+            if failure_reason:
+                validation_results.append({
+                    'Vessel Name': row[VESSEL_NAME_COL],
+                    'Report Date': row[REPORT_DATE_COL],
+                    'Remarks': ", ".join(failure_reason)
+                })
     
     return validation_results
 
@@ -125,11 +134,11 @@ st.title('ME Consumption Validation')
 
 # Button to validate data
 if st.button('Validate Data'):
-    # Fetch data from the last 6 months
+    # Fetch data from the last 6 months with vessel_type from vessel_particulars
     df = fetch_data()
     
     if not df.empty:
-        # Validate the data
+        # Validate the data for each vessel group
         validation_results = validate_data(df)
         
         if validation_results:
