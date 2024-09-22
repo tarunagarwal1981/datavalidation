@@ -10,9 +10,10 @@ ME_RPM_COL = 'me_rpm'  # Column containing ME RPM
 VESSEL_NAME_COL = 'vessel_name'  # Column for vessel name
 RUN_HOURS_COL = 'steaming_time_hrs'  # Column containing engine run hours
 CURRENT_LOAD_COL = 'me_load_pct'  # Column for load reference
-CURRENT_SPEED_COL = 'observed_speed'  # Column for vessel speed
+CURRENT_SPEED_COL = 'observed_Speed'  # Column for vessel speed
 STREAMING_HOURS_COL = 'steaming_time_hrs'  # Column for streaming hours
 REPORT_DATE_COL = 'reportdate'  # Column for report date
+LOAD_TYPE_COL = 'load_type'  # Column for load type
 
 VESSEL_TYPE_COL = 'vessel_type'  # Vessel type from vessel_particulars table
 VESSEL_PARTICULARS_TABLE_NAME = 'vessel_particulars'  # Table name containing vessel type
@@ -58,11 +59,27 @@ def merge_vessel_type(df_performance, df_particulars):
     merged_df = pd.merge(df_performance, df_particulars, on='vessel_name', how='left')
     return merged_df
 
+# Calculate average consumption for the last 30 non-null data points for each vessel and load type
+def calculate_avg_consumption(df, vessel_name, load_type):
+    # Filter for the vessel and load type
+    vessel_df = df[(df[VESSEL_NAME_COL] == vessel_name) & (df[LOAD_TYPE_COL] == load_type)]
+    # Sort by report date and filter the last 30 non-null ME consumption data points
+    vessel_df = vessel_df.dropna(subset=[ME_CONSUMPTION_COL]).sort_values(by=REPORT_DATE_COL).tail(30)
+
+    if not vessel_df.empty:
+        # Calculate avg_consumption as total ME consumption / total steaming time
+        total_consumption = vessel_df[ME_CONSUMPTION_COL].sum()
+        total_steaming_time = vessel_df[RUN_HOURS_COL].sum()
+        if total_steaming_time > 0:
+            avg_consumption = total_consumption / total_steaming_time
+            return avg_consumption
+    return None
+
 # Check if the required columns are present in the DataFrame
 def check_required_columns(df):
     required_columns = [ME_CONSUMPTION_COL, ME_POWER_COL, ME_RPM_COL, VESSEL_NAME_COL, 
                         RUN_HOURS_COL, CURRENT_LOAD_COL, CURRENT_SPEED_COL, STREAMING_HOURS_COL,
-                        REPORT_DATE_COL, VESSEL_TYPE_COL]
+                        REPORT_DATE_COL, VESSEL_TYPE_COL, LOAD_TYPE_COL]
     missing_columns = [col for col in required_columns if col not in df.columns]
     return missing_columns
 
@@ -102,6 +119,7 @@ def validate_data(df):
                 current_load = row[CURRENT_LOAD_COL]
                 current_speed = row[CURRENT_SPEED_COL]
                 streaming_hours = row[STREAMING_HOURS_COL]
+                load_type = row[LOAD_TYPE_COL]
             except KeyError as e:
                 failure_reason.append(f"Missing required column: {str(e)}")
                 continue
@@ -110,19 +128,29 @@ def validate_data(df):
             if me_consumption < 0 or me_consumption > 300:
                 failure_reason.append("ME Consumption out of range")
             
-            if me_consumption >= (250 * me_power * run_hours / 10**6):
+            if me_consumption <= (250 / me_power * run_hours * 10**6):
                 failure_reason.append("ME Consumption too high for the Reported power")
             
             if me_rpm > 0 and me_consumption == 0:
                 failure_reason.append("ME Consumption cannot be zero when underway")
             
-            if vessel_type == "CONTAINER" and me_consumption > 150:
+            if vessel_type == "container" and me_consumption > 150:
                 failure_reason.append("ME Consumption too high for container vessel")
-            elif vessel_type != "CONTAINER" and me_consumption > 60:
+            elif vessel_type != "container" and me_consumption > 60:
                 failure_reason.append("ME Consumption too high for non-container vessel")
-            
-            # Add other validation logics from your file here (e.g., avg_consumption, expected_consumption, etc.)
-            
+
+            # Calculate the average consumption for the last 30 points
+            avg_consumption = calculate_avg_consumption(df, vessel_name, load_type)
+            if avg_consumption is not None:
+                if not (0.8 * avg_consumption <= me_consumption <= 1.2 * avg_consumption):
+                    failure_reason.append(f"ME Consumption outside typical range of {load_type} condition")
+
+            # New validation for expected consumption based on speed
+            if streaming_hours > 0:
+                expected_consumption = get_speed_consumption_table(current_speed)  # Simulated speed-based consumption
+                if not (0.8 * expected_consumption <= me_consumption <= 1.2 * expected_consumption):
+                    failure_reason.append(f"ME Consumption not aligned with speed consumption table")
+
             # Collect the result if any validation failed
             if failure_reason:
                 validation_results.append({
