@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from sqlalchemy import create_engine
 from datetime import datetime, timedelta
+import urllib.parse
 
 # Define the column names based on your table structure
 ME_CONSUMPTION_COL = 'actual_me_consumption'  # Column containing ME consumption
@@ -25,7 +26,7 @@ st.sidebar.write("Data validation happened for the last 6 months.")
 supabase_host = "aws-0-ap-south-1.pooler.supabase.com"
 supabase_database = "postgres"
 supabase_user = "postgres.conrxbcvuogbzfysomov"
-supabase_password = "wXAryCC8@iwNvj#"
+supabase_password = urllib.parse.quote("wXAryCC8@iwNvj#")  # Encode special characters in the password
 supabase_port = "6543"
 
 # Function to create the SQLAlchemy engine using Supabase credentials
