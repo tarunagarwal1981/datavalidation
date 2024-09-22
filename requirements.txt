@@ -1,2 +1,5 @@
 streamlit
 pandas
+psycopg2-binary 
+openpyxl 
+matplotlib
