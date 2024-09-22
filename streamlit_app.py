@@ -138,7 +138,7 @@ def validate_data(df):
             if me_consumption < 0 or me_consumption > 300:
                 failure_reason.append("ME Consumption out of range")
             
-            if me_consumption <= (250 * me_power * run_hours / 10**6):
+            if me_consumption >= (250 * me_power * run_hours / 10**6):
                 failure_reason.append("ME Consumption too high for the Reported power")
             
             if me_rpm > 0 and me_consumption == 0:
