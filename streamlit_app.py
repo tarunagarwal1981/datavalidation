@@ -21,17 +21,17 @@ VESSEL_PARTICULARS_TABLE_NAME = 'vessel_particulars'  # Table name containing ve
 # Sidebar information
 st.sidebar.write("Data validation happened for the last 6 months.")
 
-# Database connection details (using SQLAlchemy)
-koyeb_host = "ep-rapid-wind-a1jdywyi.ap-southeast-1.pg.koyeb.app"
-koyeb_database = "koyebdb"
-koyeb_user = "koyeb-adm"
-koyeb_password = "YBK7jd6wLaRD"
-koyeb_port = "5432"
+# Supabase connection details
+supabase_host = "aws-0-ap-south-1.pooler.supabase.com"
+supabase_database = "postgres"
+supabase_user = "postgres.conrxbcvuogbzfysomov"
+supabase_password = "wXAryCC8@iwNvj#"
+supabase_port = "6543"
 
-# Function to create the SQLAlchemy engine
+# Function to create the SQLAlchemy engine using Supabase credentials
 @st.cache_resource
 def get_db_engine():
-    db_url = f"postgresql+psycopg2://{koyeb_user}:{koyeb_password}@{koyeb_host}:{koyeb_port}/{koyeb_database}"
+    db_url = f"postgresql+psycopg2://{supabase_user}:{supabase_password}@{supabase_host}:{supabase_port}/{supabase_database}"
     engine = create_engine(db_url)
     return engine
 
