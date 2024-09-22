@@ -1,151 +1,146 @@
 import streamlit as st
 import pandas as pd
-import math
-from pathlib import Path
+import psycopg2
+from datetime import datetime, timedelta
 
-# Set the title and favicon that appear in the Browser's tab bar.
-st.set_page_config(
-    page_title='GDP dashboard',
-    page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
-)
+# Define the column names based on your table structure
+ME_CONSUMPTION_COL = 'actual_ME_Consumption'  # Column containing ME consumption
+ME_POWER_COL = 'actual_ME_Power'  # Column containing ME power (kW)
+ME_RPM_COL = 'ME_RPM'  # Column containing ME RPM
+VESSEL_TYPE_COL = 'Vessel_Type'  # Column containing vessel type (e.g., container)
+RUN_HOURS_COL = 'Steaming_time_hrs'  # Column containing engine run hours
+CURRENT_LOAD_COL = 'me_load_pct'  # Column for load reference
+CURRENT_SPEED_COL = 'observed_Speed'  # Column for vessel speed
+STREAMING_HOURS_COL = 'steaming_time_hrs'  # Column for streaming hours
+REPORT_DATE_COL = 'reportdate'  # Column for report date
+VESSEL_NAME_COL = 'Vessel_Name'  # Column for vessel name
 
-# -----------------------------------------------------------------------------
-# Declare some useful functions.
+# Sidebar information
+st.sidebar.write("Data validation happened for the last 6 months.")
 
-@st.cache_data
-def get_gdp_data():
-    """Grab GDP data from a CSV file.
+# Database connection details
+koyeb_host = "ep-rapid-wind-a1jdywyi.ap-southeast-1.pg.koyeb.app"
+koyeb_database = "koyebdb"
+koyeb_user = "koyeb-adm"
+koyeb_password = "YBK7jd6wLaRD"
+koyeb_port = "5432"
 
-    This uses caching to avoid having to read the file every time. If we were
-    reading from an HTTP endpoint instead of a file, it's a good idea to set
-    a maximum age to the cache with the TTL argument: @st.cache_data(ttl='1d')
-    """
-
-    # Instead of a CSV on disk, you could read from an HTTP endpoint here too.
-    DATA_FILENAME = Path(__file__).parent/'data/gdp_data.csv'
-    raw_gdp_df = pd.read_csv(DATA_FILENAME)
-
-    MIN_YEAR = 1960
-    MAX_YEAR = 2022
-
-    # The data above has columns like:
-    # - Country Name
-    # - Country Code
-    # - [Stuff I don't care about]
-    # - GDP for 1960
-    # - GDP for 1961
-    # - GDP for 1962
-    # - ...
-    # - GDP for 2022
-    #
-    # ...but I want this instead:
-    # - Country Name
-    # - Country Code
-    # - Year
-    # - GDP
-    #
-    # So let's pivot all those year-columns into two: Year and GDP
-    gdp_df = raw_gdp_df.melt(
-        ['Country Code'],
-        [str(x) for x in range(MIN_YEAR, MAX_YEAR + 1)],
-        'Year',
-        'GDP',
+# Connect to the PostgreSQL database
+@st.cache_resource
+def get_db_connection():
+    conn = psycopg2.connect(
+        host=koyeb_host,
+        database=koyeb_database,
+        user=koyeb_user,
+        password=koyeb_password,
+        port=koyeb_port
     )
+    return conn
 
-    # Convert years from string to integers
-    gdp_df['Year'] = pd.to_numeric(gdp_df['Year'])
+# Fetch the data for the last 6 months
+def fetch_data():
+    conn = get_db_connection()
+    query = """
+    SELECT * FROM vessel_performance_summary
+    WHERE reportdate >= %s;
+    """
+    six_months_ago = datetime.now() - timedelta(days=180)
+    df = pd.read_sql_query(query, conn, params=[six_months_ago])
+    conn.close()
+    return df
 
-    return gdp_df
+# Check if the required columns are present in the DataFrame
+def check_required_columns(df):
+    required_columns = [ME_CONSUMPTION_COL, ME_POWER_COL, ME_RPM_COL, VESSEL_TYPE_COL,
+                        RUN_HOURS_COL, CURRENT_LOAD_COL, CURRENT_SPEED_COL, STREAMING_HOURS_COL,
+                        REPORT_DATE_COL, VESSEL_NAME_COL]
+    missing_columns = [col for col in required_columns if col not in df.columns]
+    return missing_columns
 
-gdp_df = get_gdp_data()
+# Run the validation logic on the fetched data
+def validate_data(df):
+    validation_results = []
+    
+    if df.shape[0] < 20:
+        validation_results.append({
+            'Vessel Name': 'N/A',
+            'Report Date': 'N/A',
+            'Remarks': "Less than 20 data points in the filtered dataset"
+        })
+        return validation_results
+    
+    missing_columns = check_required_columns(df)
+    if missing_columns:
+        validation_results.append({
+            'Vessel Name': 'N/A',
+            'Report Date': 'N/A',
+            'Remarks': f"Missing columns: {', '.join(missing_columns)}"
+        })
+        return validation_results
 
-# -----------------------------------------------------------------------------
-# Draw the actual page
+    for index, row in df.iterrows():
+        failure_reason = []
+        try:
+            me_consumption = row[ME_CONSUMPTION_COL]
+            me_power = row[ME_POWER_COL]
+            me_rpm = row[ME_RPM_COL]
+            vessel_type = row[VESSEL_TYPE_COL]
+            run_hours = row[RUN_HOURS_COL]
+            current_load = row[CURRENT_LOAD_COL]
+            current_speed = row[CURRENT_SPEED_COL]
+            streaming_hours = row[STREAMING_HOURS_COL]
+        except KeyError as e:
+            failure_reason.append(f"Missing required column: {str(e)}")
+            continue
+        
+        # Apply validation logic
+        if me_consumption < 0 or me_consumption > 300:
+            failure_reason.append("ME Consumption out of range")
+        
+        if me_consumption <= (250 / me_power * run_hours * 10**6):
+            failure_reason.append("ME Consumption too high for the Reported power")
+        
+        if me_rpm > 0 and me_consumption == 0:
+            failure_reason.append("ME Consumption cannot be zero when underway")
+        
+        if vessel_type == "container" and me_consumption > 150:
+            failure_reason.append("ME Consumption too high for container vessel")
+        elif vessel_type != "container" and me_consumption > 60:
+            failure_reason.append("ME Consumption too high for non-container vessel")
+        
+        # Add other validation logics from your file here (e.g., avg_consumption, expected_consumption, etc.)
+        
+        # Collect the result if any validation failed
+        if failure_reason:
+            validation_results.append({
+                'Vessel Name': row[VESSEL_NAME_COL],
+                'Report Date': row[REPORT_DATE_COL],
+                'Remarks': ", ".join(failure_reason)
+            })
+    
+    return validation_results
 
-# Set the title that appears at the top of the page.
-'''
-# :earth_americas: GDP dashboard
+# Main section of the Streamlit app
+st.title('ME Consumption Validation')
 
-Browse GDP data from the [World Bank Open Data](https://data.worldbank.org/) website. As you'll
-notice, the data only goes to 2022 right now, and datapoints for certain years are often missing.
-But it's otherwise a great (and did I mention _free_?) source of data.
-'''
-
-# Add some spacing
-''
-''
-
-min_value = gdp_df['Year'].min()
-max_value = gdp_df['Year'].max()
-
-from_year, to_year = st.slider(
-    'Which years are you interested in?',
-    min_value=min_value,
-    max_value=max_value,
-    value=[min_value, max_value])
-
-countries = gdp_df['Country Code'].unique()
-
-if not len(countries):
-    st.warning("Select at least one country")
-
-selected_countries = st.multiselect(
-    'Which countries would you like to view?',
-    countries,
-    ['DEU', 'FRA', 'GBR', 'BRA', 'MEX', 'JPN'])
-
-''
-''
-''
-
-# Filter the data
-filtered_gdp_df = gdp_df[
-    (gdp_df['Country Code'].isin(selected_countries))
-    & (gdp_df['Year'] <= to_year)
-    & (from_year <= gdp_df['Year'])
-]
-
-st.header('GDP over time', divider='gray')
-
-''
-
-st.line_chart(
-    filtered_gdp_df,
-    x='Year',
-    y='GDP',
-    color='Country Code',
-)
-
-''
-''
-
-
-first_year = gdp_df[gdp_df['Year'] == from_year]
-last_year = gdp_df[gdp_df['Year'] == to_year]
-
-st.header(f'GDP in {to_year}', divider='gray')
-
-''
-
-cols = st.columns(4)
-
-for i, country in enumerate(selected_countries):
-    col = cols[i % len(cols)]
-
-    with col:
-        first_gdp = first_year[first_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-        last_gdp = last_year[last_year['Country Code'] == country]['GDP'].iat[0] / 1000000000
-
-        if math.isnan(first_gdp):
-            growth = 'n/a'
-            delta_color = 'off'
+# Button to validate data
+if st.button('Validate Data'):
+    # Fetch data from the last 6 months
+    df = fetch_data()
+    
+    if not df.empty:
+        # Validate the data
+        validation_results = validate_data(df)
+        
+        if validation_results:
+            result_df = pd.DataFrame(validation_results)
+            st.write("Validation Results:")
+            st.dataframe(result_df)
+            
+            # Option to download results as CSV
+            csv = result_df.to_csv(index=False)
+            st.download_button(label="Download validation report as CSV", data=csv, file_name='validation_report.csv', mime='text/csv')
         else:
-            growth = f'{last_gdp / first_gdp:,.2f}x'
-            delta_color = 'normal'
-
-        st.metric(
-            label=f'{country} GDP',
-            value=f'{last_gdp:,.0f}B',
-            delta=growth,
-            delta_color=delta_color
-        )
+            st.write("All data passed the validation checks!")
+    else:
+        st.write("No data found for the last 6 months.")
