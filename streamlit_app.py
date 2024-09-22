@@ -61,6 +61,10 @@ def fetch_vessel_type_data(engine):
 
 # Merge vessel type data with vessel performance data using vessel_imo
 def merge_vessel_type(df_performance, df_particulars):
+    # Convert both vessel_imo columns to string to avoid merge issues
+    df_performance[VESSEL_IMO_COL] = df_performance[VESSEL_IMO_COL].astype(str)
+    df_particulars[VESSEL_IMO_PARTICULARS_COL] = df_particulars[VESSEL_IMO_PARTICULARS_COL].astype(str)
+    
     # Merge the two dataframes on the vessel_imo column
     merged_df = pd.merge(df_performance, df_particulars, left_on=VESSEL_IMO_COL, right_on=VESSEL_IMO_PARTICULARS_COL, how='left')
     return merged_df
