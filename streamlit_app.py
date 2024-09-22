@@ -43,7 +43,10 @@ def fetch_data():
     """
     
     six_months_ago = datetime.now() - timedelta(days=180)
-    df = pd.read_sql_query(query, engine, params=[six_months_ago])
+    
+    # Use tuple to pass the parameter
+    df = pd.read_sql_query(query, engine, params=(six_months_ago,))
+    
     engine.dispose()  # Close the connection
     return df
 
@@ -105,7 +108,7 @@ def validate_data(df):
             if me_rpm > 0 and me_consumption == 0:
                 failure_reason.append("ME Consumption cannot be zero when underway")
             
-            if vessel_type == "CONTAINER" and me_consumption > 150:
+            if vessel_type == "container" and me_consumption > 150:
                 failure_reason.append("ME Consumption too high for container vessel")
             elif vessel_type != "container" and me_consumption > 60:
                 failure_reason.append("ME Consumption too high for non-container vessel")
