@@ -38,10 +38,10 @@ def get_db_engine():
 def fetch_vessel_performance_data(engine):
     query = """
     SELECT * FROM vessel_performance_summary
-    WHERE reportdate >= %s;
+    WHERE reportdate >= :six_months_ago;
     """
     six_months_ago = datetime.now() - timedelta(days=180)
-    df = pd.read_sql_query(query, engine, params=[six_months_ago])
+    df = pd.read_sql_query(query, engine, params={'six_months_ago': six_months_ago})
     return df
 
 # Fetch vessel type information from the vessel_particulars table
