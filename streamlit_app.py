@@ -1,19 +1,21 @@
 import streamlit as st
 import pandas as pd
-from sqlalchemy import create_engine
+import psycopg2
 from datetime import datetime, timedelta
 
 # Define the column names based on your table structure
 ME_CONSUMPTION_COL = 'actual_me_consumption'  # Column containing ME consumption
 ME_POWER_COL = 'actual_me_power'  # Column containing ME power (kW)
 ME_RPM_COL = 'me_rpm'  # Column containing ME RPM
-VESSEL_TYPE_COL = 'vessel_type'  # Column containing vessel type (e.g., container)
+VESSEL_NAME_COL = 'vessel_name'  # Column for vessel name
 RUN_HOURS_COL = 'steaming_time_hrs'  # Column containing engine run hours
 CURRENT_LOAD_COL = 'me_load_pct'  # Column for load reference
 CURRENT_SPEED_COL = 'observed_Speed'  # Column for vessel speed
 STREAMING_HOURS_COL = 'steaming_time_hrs'  # Column for streaming hours
 REPORT_DATE_COL = 'reportdate'  # Column for report date
-VESSEL_NAME_COL = 'vessel_name'  # Column for vessel name
+
+VESSEL_TYPE_COL = 'vessel_type'  # Vessel type from vessel_particulars table
+VESSEL_PARTICULARS_TABLE_NAME = 'vessel_particulars'  # Table name containing vessel type
 
 # Sidebar information
 st.sidebar.write("Data validation happened for the last 6 months.")
@@ -25,36 +27,51 @@ koyeb_user = "koyeb-adm"
 koyeb_password = "YBK7jd6wLaRD"
 koyeb_port = "5432"
 
-# Create a SQLAlchemy engine
-def get_db_engine():
-    engine = create_engine(f"postgresql+psycopg2://{koyeb_user}:{koyeb_password}@{koyeb_host}:{koyeb_port}/{koyeb_database}")
-    return engine
+# Connect to the PostgreSQL database
+@st.cache_resource
+def get_db_connection():
+    conn = psycopg2.connect(
+        host=koyeb_host,
+        database=koyeb_database,
+        user=koyeb_user,
+        password=koyeb_password,
+        port=koyeb_port
+    )
+    return conn
 
-# Fetch the data for the last 6 months with vessel_type from vessel_particulars
-def fetch_data():
-    engine = get_db_engine()
-    
-    # SQL Query that joins vessel_performance_summary and vessel_particulars based on vessel_name
+# Fetch the data for the last 6 months from the vessel_performance_summary table
+def fetch_vessel_performance_data():
+    conn = get_db_connection()
     query = """
-    SELECT sf.*, vp.vessel_type
-    FROM vessel_performance_summary sf
-    LEFT JOIN vessel_particulars vp ON sf.vessel_name = vp.vessel_name
-    WHERE sf.reportdate >= %s;
+    SELECT * FROM vessel_performance_summary
+    WHERE reportdate >= %s;
     """
-    
     six_months_ago = datetime.now() - timedelta(days=180)
-    
-    # Use tuple to pass the parameter
-    df = pd.read_sql_query(query, engine, params=(six_months_ago,))
-    
-    engine.dispose()  # Close the connection
+    df = pd.read_sql_query(query, conn, params=[six_months_ago])
+    conn.close()
     return df
+
+# Fetch vessel type information from the vessel_particulars table
+def fetch_vessel_type_data():
+    conn = get_db_connection()
+    query = """
+    SELECT vessel_name, vessel_type FROM vessel_particulars;
+    """
+    vessel_type_df = pd.read_sql_query(query, conn)
+    conn.close()
+    return vessel_type_df
+
+# Merge vessel type data with vessel performance data
+def merge_vessel_type(df_performance, df_particulars):
+    # Merge the two dataframes on the vessel_name column
+    merged_df = pd.merge(df_performance, df_particulars, on='vessel_name', how='left')
+    return merged_df
 
 # Check if the required columns are present in the DataFrame
 def check_required_columns(df):
-    required_columns = [ME_CONSUMPTION_COL, ME_POWER_COL, ME_RPM_COL, VESSEL_TYPE_COL,
+    required_columns = [ME_CONSUMPTION_COL, ME_POWER_COL, ME_RPM_COL, VESSEL_NAME_COL, 
                         RUN_HOURS_COL, CURRENT_LOAD_COL, CURRENT_SPEED_COL, STREAMING_HOURS_COL,
-                        REPORT_DATE_COL, VESSEL_NAME_COL]
+                        REPORT_DATE_COL, VESSEL_TYPE_COL]
     missing_columns = [col for col in required_columns if col not in df.columns]
     return missing_columns
 
@@ -89,7 +106,7 @@ def validate_data(df):
                 me_consumption = row[ME_CONSUMPTION_COL]
                 me_power = row[ME_POWER_COL]
                 me_rpm = row[ME_RPM_COL]
-                vessel_type = row[VESSEL_TYPE_COL]  # Retrieved from vessel_particulars
+                vessel_type = row[VESSEL_TYPE_COL]
                 run_hours = row[RUN_HOURS_COL]
                 current_load = row[CURRENT_LOAD_COL]
                 current_speed = row[CURRENT_SPEED_COL]
@@ -113,6 +130,8 @@ def validate_data(df):
             elif vessel_type != "container" and me_consumption > 60:
                 failure_reason.append("ME Consumption too high for non-container vessel")
             
+            # Add other validation logics from your file here (e.g., avg_consumption, expected_consumption, etc.)
+            
             # Collect the result if any validation failed
             if failure_reason:
                 validation_results.append({
@@ -128,8 +147,12 @@ st.title('ME Consumption Validation')
 
 # Button to validate data
 if st.button('Validate Data'):
-    # Fetch data from the last 6 months with vessel_type from vessel_particulars
-    df = fetch_data()
+    # Fetch data from vessel performance and particulars tables
+    df_performance = fetch_vessel_performance_data()
+    df_particulars = fetch_vessel_type_data()
+
+    # Merge vessel type from particulars into the performance data
+    df = merge_vessel_type(df_performance, df_particulars)
     
     if not df.empty:
         # Validate the data for each vessel group
