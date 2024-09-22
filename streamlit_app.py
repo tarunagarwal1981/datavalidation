@@ -11,7 +11,7 @@ ME_RPM_COL = 'me_rpm'  # Column containing ME RPM
 VESSEL_IMO_COL = 'vessel_imo'  # Column for vessel IMO in vessel_performance_summary
 RUN_HOURS_COL = 'steaming_time_hrs'  # Column containing engine run hours
 CURRENT_LOAD_COL = 'me_load_pct'  # Column for load reference
-CURRENT_SPEED_COL = 'observed_Speed'  # Column for vessel speed
+CURRENT_SPEED_COL = 'observed_speed'  # Column for vessel speed
 STREAMING_HOURS_COL = 'steaming_time_hrs'  # Column for streaming hours
 REPORT_DATE_COL = 'reportdate'  # Column for report date
 LOAD_TYPE_COL = 'load_type'  # Column for load type
@@ -47,7 +47,7 @@ def fetch_vessel_performance_data(engine):
     SELECT * FROM vessel_performance_summary
     WHERE reportdate >= %s;
     """
-    six_months_ago = datetime.now() - timedelta(days=180)
+    six_months_ago = datetime.now() - timedelta(days=90)
     df = pd.read_sql_query(query, engine, params=(six_months_ago,))
     return df
 
@@ -138,15 +138,15 @@ def validate_data(df):
             if me_consumption < 0 or me_consumption > 300:
                 failure_reason.append("ME Consumption out of range")
             
-            if me_consumption <= (250 / me_power * run_hours * 10**6):
+            if me_consumption <= (250 * me_power * run_hours / 10**6):
                 failure_reason.append("ME Consumption too high for the Reported power")
             
             if me_rpm > 0 and me_consumption == 0:
                 failure_reason.append("ME Consumption cannot be zero when underway")
             
-            if vessel_type == "container" and me_consumption > 150:
+            if vessel_type == "CONTAINER" and me_consumption > 150:
                 failure_reason.append("ME Consumption too high for container vessel")
-            elif vessel_type != "container" and me_consumption > 60:
+            elif vessel_type != "CONTAINER" and me_consumption > 60:
                 failure_reason.append("ME Consumption too high for non-container vessel")
 
             # Calculate the average consumption for the last 30 points
