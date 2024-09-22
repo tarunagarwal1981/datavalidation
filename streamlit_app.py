@@ -10,7 +10,7 @@ ME_RPM_COL = 'me_rpm'  # Column containing ME RPM
 VESSEL_NAME_COL = 'vessel_name'  # Column for vessel name
 RUN_HOURS_COL = 'steaming_time_hrs'  # Column containing engine run hours
 CURRENT_LOAD_COL = 'me_load_pct'  # Column for load reference
-CURRENT_SPEED_COL = 'observed_Speed'  # Column for vessel speed
+CURRENT_SPEED_COL = 'observed_speed'  # Column for vessel speed
 STREAMING_HOURS_COL = 'steaming_time_hrs'  # Column for streaming hours
 REPORT_DATE_COL = 'reportdate'  # Column for report date
 
