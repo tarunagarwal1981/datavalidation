@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import psycopg2
+from sqlalchemy import create_engine
 from datetime import datetime, timedelta
 
 # Define the column names based on your table structure
@@ -25,21 +25,14 @@ koyeb_user = "koyeb-adm"
 koyeb_password = "YBK7jd6wLaRD"
 koyeb_port = "5432"
 
-# Connect to the PostgreSQL database
-@st.cache_resource
-def get_db_connection():
-    conn = psycopg2.connect(
-        host=koyeb_host,
-        database=koyeb_database,
-        user=koyeb_user,
-        password=koyeb_password,
-        port=koyeb_port
-    )
-    return conn
+# Create a SQLAlchemy engine
+def get_db_engine():
+    engine = create_engine(f"postgresql+psycopg2://{koyeb_user}:{koyeb_password}@{koyeb_host}:{koyeb_port}/{koyeb_database}")
+    return engine
 
 # Fetch the data for the last 6 months with vessel_type from vessel_particulars
 def fetch_data():
-    conn = get_db_connection()
+    engine = get_db_engine()
     
     # SQL Query that joins vessel_performance_summary and vessel_particulars based on vessel_name
     query = """
@@ -50,8 +43,8 @@ def fetch_data():
     """
     
     six_months_ago = datetime.now() - timedelta(days=180)
-    df = pd.read_sql_query(query, conn, params=[six_months_ago])
-    conn.close()
+    df = pd.read_sql_query(query, engine, params=[six_months_ago])
+    engine.dispose()  # Close the connection
     return df
 
 # Check if the required columns are present in the DataFrame
@@ -112,12 +105,10 @@ def validate_data(df):
             if me_rpm > 0 and me_consumption == 0:
                 failure_reason.append("ME Consumption cannot be zero when underway")
             
-            if vessel_type == "container" and me_consumption > 150:
+            if vessel_type == "CONTAINER" and me_consumption > 150:
                 failure_reason.append("ME Consumption too high for container vessel")
             elif vessel_type != "container" and me_consumption > 60:
                 failure_reason.append("ME Consumption too high for non-container vessel")
-            
-            # Add other validation logics from your file here (e.g., avg_consumption, expected_consumption, etc.)
             
             # Collect the result if any validation failed
             if failure_reason:
