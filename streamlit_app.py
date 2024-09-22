@@ -4,7 +4,7 @@ import psycopg2
 from datetime import datetime, timedelta
 
 # Define the column names based on your table structure
-ME_CONSUMPTION_COL = 'actual_ME_Consumption'  # Column containing ME consumption
+ME_CONSUMPTION_COL = 'actual_me_consumption'  # Column containing ME consumption
 ME_POWER_COL = 'actual_ME_Power'  # Column containing ME power (kW)
 ME_RPM_COL = 'ME_RPM'  # Column containing ME RPM
 VESSEL_TYPE_COL = 'Vessel_Type'  # Column containing vessel type (e.g., container)
