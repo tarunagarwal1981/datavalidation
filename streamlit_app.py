@@ -156,10 +156,10 @@ def validate_data(df):
                     failure_reason.append(f"ME Consumption outside typical range of {load_type} condition")
 
             # New validation for expected consumption based on speed
-            if streaming_hours > 0:
-                expected_consumption = get_speed_consumption_table(current_speed)  # Simulated speed-based consumption
-                if not (0.8 * expected_consumption <= me_consumption <= 1.2 * expected_consumption):
-                    failure_reason.append(f"ME Consumption not aligned with speed consumption table")
+      #          if streaming_hours > 0:
+       #         expected_consumption = get_speed_consumption_table(current_speed)  # Simulated speed-based consumption
+        #        if not (0.8 * expected_consumption <= me_consumption <= 1.2 * expected_consumption):
+         #           failure_reason.append(f"ME Consumption not aligned with speed consumption table")
 
             # Collect the result if any validation failed
             if failure_reason:
