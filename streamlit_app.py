@@ -5,15 +5,15 @@ from datetime import datetime, timedelta
 
 # Define the column names based on your table structure
 ME_CONSUMPTION_COL = 'actual_me_consumption'  # Column containing ME consumption
-ME_POWER_COL = 'actual_ME_Power'  # Column containing ME power (kW)
-ME_RPM_COL = 'ME_RPM'  # Column containing ME RPM
-VESSEL_TYPE_COL = 'Vessel_Type'  # Column containing vessel type (e.g., container)
-RUN_HOURS_COL = 'Steaming_time_hrs'  # Column containing engine run hours
+ME_POWER_COL = 'actual_me_power'  # Column containing ME power (kW)
+ME_RPM_COL = 'me_rpm'  # Column containing ME RPM
+VESSEL_TYPE_COL = 'vessel_type'  # Column containing vessel type (e.g., container)
+RUN_HOURS_COL = 'steaming_time_hrs'  # Column containing engine run hours
 CURRENT_LOAD_COL = 'me_load_pct'  # Column for load reference
 CURRENT_SPEED_COL = 'observed_Speed'  # Column for vessel speed
 STREAMING_HOURS_COL = 'steaming_time_hrs'  # Column for streaming hours
 REPORT_DATE_COL = 'reportdate'  # Column for report date
-VESSEL_NAME_COL = 'Vessel_Name'  # Column for vessel name
+VESSEL_NAME_COL = 'vessel_name'  # Column for vessel name
 
 # Sidebar information
 st.sidebar.write("Data validation happened for the last 6 months.")
