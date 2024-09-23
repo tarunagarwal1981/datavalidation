@@ -47,7 +47,7 @@ def fetch_vessel_performance_data(engine):
     SELECT * FROM vessel_performance_summary
     WHERE reportdate >= %s;
     """
-    six_months_ago = datetime.now() - timedelta(days=180)
+    six_months_ago = datetime.now() - timedelta(days=90)
     df = pd.read_sql_query(query, engine, params=(six_months_ago,))
     return df
 
