@@ -118,14 +118,10 @@ def validate_data(df):
         })
         return validation_results
 
-    # Group by vessel IMO and apply validation to each group
-    grouped = df.groupby(VESSEL_IMO_COL)
+    # Group by vessel name instead of IMO
+    grouped = df.groupby(VESSEL_NAME_COL)
 
-    for vessel_imo, vessel_data in grouped:
-        if VESSEL_NAME_COL in vessel_data.columns:
-            vessel_name = vessel_data[VESSEL_NAME_COL].iloc[0]  # Get the vessel name from merged data
-        else:
-            vessel_name = 'Unknown'  # Fallback if vessel_name is missing
+    for vessel_name, vessel_data in grouped:
         for index, row in vessel_data.iterrows():
             failure_reason = []
             try:
@@ -138,6 +134,7 @@ def validate_data(df):
                 current_speed = row[CURRENT_SPEED_COL]
                 streaming_hours = row[STREAMING_HOURS_COL]
                 load_type = row[LOAD_TYPE_COL]
+                vessel_imo = row[VESSEL_IMO_COL]  # We still need IMO for average consumption calculation
             except KeyError as e:
                 failure_reason.append(f"Missing required column: {str(e)}")
                 continue
@@ -178,23 +175,31 @@ st.title('ME Consumption Validation')
 
 # Button to validate data
 if st.button('Validate Data'):
-    # Create the database engine using SQLAlchemy
     engine = get_db_engine()
 
     try:
-        # Fetch data from vessel performance and particulars tables
         df_performance = fetch_vessel_performance_data(engine)
         df_particulars = fetch_vessel_type_data(engine)
 
-        # Merge vessel type from particulars into the performance data using vessel_imo
         df = merge_vessel_type(df_performance, df_particulars)
         
         if not df.empty:
-            # Validate the data for each vessel group
             validation_results = validate_data(df)
             
             if validation_results:
                 result_df = pd.DataFrame(validation_results)
+                st.write("Validation Results:")
+                st.dataframe(result_df)
+                
+                csv = result_df.to_csv(index=False)
+                st.download_button(label="Download validation report as CSV", data=csv, file_name='validation_report.csv', mime='text/csv')
+            else:
+                st.write("All data passed the validation checks!")
+        else:
+            st.write("No data found for the last 6 months.")
+    
+    except Exception as e:
+        st.error(f"An error occurred: {str(e)}")
                 st.write("Validation Results:")
                 st.dataframe(result_df)
                 
