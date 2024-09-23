@@ -11,7 +11,7 @@ ME_RPM_COL = 'me_rpm'  # Column containing ME RPM
 VESSEL_IMO_COL = 'vessel_imo'  # Column for vessel IMO in vessel_performance_summary
 RUN_HOURS_COL = 'steaming_time_hrs'  # Column containing engine run hours
 CURRENT_LOAD_COL = 'me_load_pct'  # Column for load reference
-CURRENT_SPEED_COL = 'observed_speed'  # Column for vessel speed
+CURRENT_SPEED_COL = 'observed_Speed'  # Column for vessel speed
 STREAMING_HOURS_COL = 'steaming_time_hrs'  # Column for streaming hours
 REPORT_DATE_COL = 'reportdate'  # Column for report date
 LOAD_TYPE_COL = 'load_type'  # Column for load type
@@ -99,7 +99,7 @@ def validate_data(df):
     
     if df.shape[0] < 20:
         validation_results.append({
-            'Vessel Name': 'N/A',
+            'Vessel IMO': 'N/A',
             'Report Date': 'N/A',
             'Remarks': "Less than 20 data points in the filtered dataset"
         })
@@ -108,7 +108,7 @@ def validate_data(df):
     missing_columns = check_required_columns(df)
     if missing_columns:
         validation_results.append({
-            'Vessel Name': 'N/A',
+            'Vessel IMO': 'N/A',
             'Report Date': 'N/A',
             'Remarks': f"Missing columns: {', '.join(missing_columns)}"
         })
@@ -118,7 +118,6 @@ def validate_data(df):
     grouped = df.groupby(VESSEL_IMO_COL)
 
     for vessel_imo, vessel_data in grouped:
-        vessel_name = vessel_data[VESSEL_NAME_COL].iloc[0]  # Get the vessel name from merged data
         for index, row in vessel_data.iterrows():
             failure_reason = []
             try:
@@ -139,15 +138,15 @@ def validate_data(df):
             if me_consumption < 0 or me_consumption > 300:
                 failure_reason.append("ME Consumption out of range")
             
-            if me_consumption >= (250 * me_power * run_hours / 10**6):
+            if me_consumption <= (250 / me_power * run_hours * 10**6):
                 failure_reason.append("ME Consumption too high for the Reported power")
             
             if me_rpm > 0 and me_consumption == 0:
                 failure_reason.append("ME Consumption cannot be zero when underway")
             
-            if vessel_type == "CONTAINER" and me_consumption > 150:
+            if vessel_type == "container" and me_consumption > 150:
                 failure_reason.append("ME Consumption too high for container vessel")
-            elif vessel_type != "CONTAINER" and me_consumption > 60:
+            elif vessel_type != "container" and me_consumption > 60:
                 failure_reason.append("ME Consumption too high for non-container vessel")
 
             # Calculate the average consumption for the last 30 points
@@ -156,10 +155,16 @@ def validate_data(df):
                 if not (0.8 * avg_consumption <= me_consumption <= 1.2 * avg_consumption):
                     failure_reason.append(f"ME Consumption outside typical range of {load_type} condition")
 
+            # New validation for expected consumption based on speed
+            if streaming_hours > 0:
+                expected_consumption = get_speed_consumption_table(current_speed)  # Simulated speed-based consumption
+                if not (0.8 * expected_consumption <= me_consumption <= 1.2 * expected_consumption):
+                    failure_reason.append(f"ME Consumption not aligned with speed consumption table")
+
             # Collect the result if any validation failed
             if failure_reason:
                 validation_results.append({
-                    'Vessel Name': row[VESSEL_IMO_COL],
+                    'Vessel IMO': row[VESSEL_IMO_COL],
                     'Report Date': row[REPORT_DATE_COL],
                     'Remarks': ", ".join(failure_reason)
                 })
