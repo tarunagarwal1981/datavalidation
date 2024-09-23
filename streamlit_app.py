@@ -92,11 +92,11 @@ def validate_data(df):
             elif vessel_type != "CONTAINER" and me_consumption > 50:
                 failure_reasons.append("ME Consumption too high for non-container vessel")
 
-            # # Historical data comparison
-            # avg_consumption = calculate_avg_consumption(vessel_data, load_type)
-            # if avg_consumption is not None:
-            #     if not (0.8 * avg_consumption <= me_consumption <= 1.2 * avg_consumption):
-            #         failure_reasons.append(f"ME Consumption outside typical range of {load_type} condition")
+            # Historical data comparison
+            avg_consumption = calculate_avg_consumption(vessel_data, load_type)
+            if avg_consumption is not None:
+                if not (0.8 * avg_consumption <= me_consumption <= 1.2 * avg_consumption):
+                    failure_reasons.append(f"ME Consumption outside typical range of {load_type} condition")
 
             if failure_reasons:
                 validation_results.append({
