@@ -65,12 +65,23 @@ def merge_vessel_type(df_performance, df_particulars):
     df_performance[VESSEL_IMO_COL] = df_performance[VESSEL_IMO_COL].astype(str)
     df_particulars[VESSEL_IMO_PARTICULARS_COL] = df_particulars[VESSEL_IMO_PARTICULARS_COL].astype(str)
     
+    # Debug: Print column names before merging
+    st.write("Columns in df_performance:", df_performance.columns.tolist())
+    st.write("Columns in df_particulars:", df_particulars.columns.tolist())
+    
     # Merge the two dataframes on the vessel_imo column
-    merged_df = pd.merge(df_performance, df_particulars, left_on=VESSEL_IMO_COL, right_on=VESSEL_IMO_PARTICULARS_COL, how='left')
+    merged_df = pd.merge(df_performance, df_particulars[[VESSEL_IMO_PARTICULARS_COL, VESSEL_NAME_COL, VESSEL_TYPE_COL]], 
+                         left_on=VESSEL_IMO_COL, right_on=VESSEL_IMO_PARTICULARS_COL, how='left')
+    
+    # Debug: Print column names after merging
+    st.write("Columns in merged_df:", merged_df.columns.tolist())
     
     # Verify if vessel_name exists after merging
     if VESSEL_NAME_COL not in merged_df.columns:
-        st.error("Error: 'vessel_name' column is missing after merging. Check if the column exists in the vessel_particulars table.")
+        st.error(f"Error: '{VESSEL_NAME_COL}' column is missing after merging. Check if the column exists in the vessel_particulars table.")
+        # If vessel_name is missing, create a placeholder column
+        merged_df[VESSEL_NAME_COL] = "Unknown Vessel"
+    
     return merged_df
 
 # Calculate average consumption for the last 30 non-null data points for each vessel and load type
@@ -181,9 +192,17 @@ if st.button('Validate Data'):
         df_performance = fetch_vessel_performance_data(engine)
         df_particulars = fetch_vessel_type_data(engine)
 
+        # Debug: Print sample data from df_particulars
+        st.write("Sample data from vessel_particulars:")
+        st.write(df_particulars.head())
+
         df = merge_vessel_type(df_performance, df_particulars)
         
         if not df.empty:
+            # Debug: Print sample data from merged dataframe
+            st.write("Sample data from merged dataframe:")
+            st.write(df.head())
+
             validation_results = validate_data(df)
             
             if validation_results:
