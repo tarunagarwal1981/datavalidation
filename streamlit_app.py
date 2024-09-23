@@ -51,13 +51,13 @@ def fetch_vessel_performance_data(engine):
     return df
 
 # Calculate average consumption for the last 30 non-null data points for each vessel and load type
-def calculate_avg_consumption(df, vessel_name, load_type):
-    vessel_df = df[(df[VESSEL_NAME_COL] == vessel_name) & (df[LOAD_TYPE_COL] == load_type)]
-    vessel_df = vessel_df.dropna(subset=[ME_CONSUMPTION_COL]).sort_values(by=REPORT_DATE_COL).tail(10)
+def calculate_avg_consumption(vessel_df, load_type):
+    relevant_data = vessel_df[vessel_df[LOAD_TYPE_COL] == load_type].dropna(subset=[ME_CONSUMPTION_COL])
+    relevant_data = relevant_data.sort_values(by=REPORT_DATE_COL).tail(30)
 
-    if not vessel_df.empty:
-        total_consumption = vessel_df[ME_CONSUMPTION_COL].sum()
-        total_steaming_time = vessel_df[RUN_HOURS_COL].sum()
+    if len(relevant_data) >= 10:  # Only calculate if we have at least 10 data points
+        total_consumption = relevant_data[ME_CONSUMPTION_COL].sum()
+        total_steaming_time = relevant_data[RUN_HOURS_COL].sum()
         if total_steaming_time > 0:
             return total_consumption / total_steaming_time
     return None
@@ -68,6 +68,7 @@ def validate_data(df):
     
     for vessel_name, vessel_data in df.groupby(VESSEL_NAME_COL):
         vessel_type = vessel_data[VESSEL_TYPE_COL].iloc[0]  # Get vessel type for this vessel
+        
         for _, row in vessel_data.iterrows():
             failure_reasons = []
             
@@ -91,17 +92,18 @@ def validate_data(df):
             elif vessel_type != "CONTAINER" and me_consumption > 20:
                 failure_reasons.append("ME Consumption too high for non-container vessel")
 
-            # avg_consumption = calculate_avg_consumption(df, vessel_name, load_type)
+            # # Historical data comparison
+            # avg_consumption = calculate_avg_consumption(vessel_data, load_type)
             # if avg_consumption is not None:
             #     if not (0.8 * avg_consumption <= me_consumption <= 1.2 * avg_consumption):
             #         failure_reasons.append(f"ME Consumption outside typical range of {load_type} condition")
 
-            # if failure_reasons:
-            #     validation_results.append({
-            #         'Vessel Name': vessel_name,
-            #         'Report Date': row[REPORT_DATE_COL],
-            #         'Remarks': ", ".join(failure_reasons)
-            #     })
+            if failure_reasons:
+                validation_results.append({
+                    'Vessel Name': vessel_name,
+                    'Report Date': row[REPORT_DATE_COL],
+                    'Remarks': ", ".join(failure_reasons)
+                })
     
     return validation_results
 
