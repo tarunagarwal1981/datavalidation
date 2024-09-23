@@ -51,6 +51,13 @@ def fetch_vessel_performance_data(engine):
     df = pd.read_sql_query(query, engine, params=(three_months_ago,))
     return df
 
+def fetch_hull_performance_data(engine):
+    query = """
+    SELECT vessel_name, hul_rough_power_loss_pct_ed
+    FROM hull_performance_six_months;
+    """
+    return pd.read_sql_query(query, engine)
+
 # New function to fetch vessel performance coefficients
 def fetch_vessel_coefficients(engine):
     query = """
@@ -72,20 +79,24 @@ def calculate_avg_consumption(vessel_df, load_type):
     return None
 
 # Function to calculate expected consumption
-def calculate_expected_consumption(coefficients, speed, displacement):
-    return (coefficients['consp_speed1'] * speed +
-            coefficients['consp_disp1'] * displacement +
-            coefficients['consp_speed2'] * speed**2 +
-            coefficients['consp_disp2'] * displacement**2 +
-            coefficients['consp_intercept'])
+def calculate_expected_consumption(coefficients, speed, displacement, hull_performance_factor):
+    base_consumption = (coefficients['consp_speed1'] * speed +
+                        coefficients['consp_disp1'] * displacement +
+                        coefficients['consp_speed2'] * speed**2 +
+                        coefficients['consp_disp2'] * displacement**2 +
+                        coefficients['consp_intercept'])
+    return base_consumption * hull_performance_factor
 
-# Run the validation logic for each vessel
-def validate_data(df, coefficients_df):
+def validate_data(df, coefficients_df, hull_performance_df):
     validation_results = []
     
     for vessel_name, vessel_data in df.groupby(VESSEL_NAME_COL):
-        vessel_type = vessel_data[VESSEL_TYPE_COL].iloc[0]  # Get vessel type for this vessel
+        vessel_type = vessel_data[VESSEL_TYPE_COL].iloc[0]
         vessel_coefficients = coefficients_df[coefficients_df[VESSEL_NAME_COL] == vessel_name].iloc[0] if not coefficients_df[coefficients_df[VESSEL_NAME_COL] == vessel_name].empty else None
+        
+        # Get hull performance factor
+        hull_performance = hull_performance_df[hull_performance_df[VESSEL_NAME_COL] == vessel_name]['hul_rough_power_loss_pct_ed'].iloc[0] if not hull_performance_df[hull_performance_df[VESSEL_NAME_COL] == vessel_name].empty else 0
+        hull_performance_factor = 1 + (hull_performance / 100)
         
         for _, row in vessel_data.iterrows():
             failure_reasons = []
