@@ -73,11 +73,11 @@ def calculate_avg_consumption(vessel_df, load_type):
 
 # Function to calculate expected consumption
 def calculate_expected_consumption(coefficients, speed, displacement):
-    return (coefficients['CONSP_SPEED1'] * speed +
-            coefficients['CONSP_DISP1'] * displacement +
-            coefficients['CONSP_SPEED2'] * speed**2 +
-            coefficients['CONSP_DISP2'] * displacement**2 +
-            coefficients['CONSP_INTERCEPT'])
+    return (coefficients['consp_speed1'] * speed +
+            coefficients['consp_disp1'] * displacement +
+            coefficients['consp_speed2'] * speed**2 +
+            coefficients['consp_disp2'] * displacement**2 +
+            coefficients['consp_intercept'])
 
 # Run the validation logic for each vessel
 def validate_data(df, coefficients_df):
