@@ -78,7 +78,7 @@ def validate_data(df):
             run_hours = row[RUN_HOURS_COL]
             load_type = row[LOAD_TYPE_COL]
             
-            if me_consumption < 0 or me_consumption > 20:
+            if me_consumption < 0 or me_consumption > 250:
                 failure_reasons.append("ME Consumption out of range")
             
             if me_consumption >= (250 * me_power * run_hours / 10**6):
