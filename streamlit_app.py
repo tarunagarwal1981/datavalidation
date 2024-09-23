@@ -200,16 +200,3 @@ if st.button('Validate Data'):
     
     except Exception as e:
         st.error(f"An error occurred: {str(e)}")
-                st.write("Validation Results:")
-                st.dataframe(result_df)
-                
-                # Option to download results as CSV
-                csv = result_df.to_csv(index=False)
-                st.download_button(label="Download validation report as CSV", data=csv, file_name='validation_report.csv', mime='text/csv')
-            else:
-                st.write("All data passed the validation checks!")
-        else:
-            st.write("No data found for the last 6 months.")
-    
-    except Exception as e:
-        st.error(f"An error occurred: {str(e)}")
