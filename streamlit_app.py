@@ -47,7 +47,7 @@ def fetch_vessel_performance_data(engine):
     SELECT * FROM vessel_performance_summary
     WHERE reportdate >= %s;
     """
-    six_months_ago = datetime.now() - timedelta(days=90)
+    six_months_ago = datetime.now() - timedelta(days=180)
     df = pd.read_sql_query(query, engine, params=(six_months_ago,))
     return df
 
@@ -99,7 +99,7 @@ def validate_data(df):
     
     if df.shape[0] < 20:
         validation_results.append({
-            'Vessel IMO': 'N/A',
+            'Vessel Name': 'N/A',
             'Report Date': 'N/A',
             'Remarks': "Less than 20 data points in the filtered dataset"
         })
@@ -108,7 +108,7 @@ def validate_data(df):
     missing_columns = check_required_columns(df)
     if missing_columns:
         validation_results.append({
-            'Vessel IMO': 'N/A',
+            'Vessel Name': 'N/A',
             'Report Date': 'N/A',
             'Remarks': f"Missing columns: {', '.join(missing_columns)}"
         })
@@ -118,6 +118,7 @@ def validate_data(df):
     grouped = df.groupby(VESSEL_IMO_COL)
 
     for vessel_imo, vessel_data in grouped:
+        vessel_name = vessel_data[VESSEL_NAME_COL].iloc[0]  # Get the vessel name from merged data
         for index, row in vessel_data.iterrows():
             failure_reason = []
             try:
@@ -155,16 +156,10 @@ def validate_data(df):
                 if not (0.8 * avg_consumption <= me_consumption <= 1.2 * avg_consumption):
                     failure_reason.append(f"ME Consumption outside typical range of {load_type} condition")
 
-            # New validation for expected consumption based on speed
-      #          if streaming_hours > 0:
-       #         expected_consumption = get_speed_consumption_table(current_speed)  # Simulated speed-based consumption
-        #        if not (0.8 * expected_consumption <= me_consumption <= 1.2 * expected_consumption):
-         #           failure_reason.append(f"ME Consumption not aligned with speed consumption table")
-
             # Collect the result if any validation failed
             if failure_reason:
                 validation_results.append({
-                    'Vessel IMO': row[VESSEL_NAME_COL],
+                    'Vessel Name': vessel_name,
                     'Report Date': row[REPORT_DATE_COL],
                     'Remarks': ", ".join(failure_reason)
                 })
