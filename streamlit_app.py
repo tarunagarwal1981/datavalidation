@@ -1,143 +1,132 @@
-from pyspark.sql import DataFrame
-from pyspark.sql.types import DecimalType
-from sqlalchemy import create_engine
+import streamlit as st
 import pandas as pd
+from sqlalchemy import create_engine
+from datetime import datetime, timedelta
+import urllib.parse
+
+# Define the column names based on your table structure
+ME_CONSUMPTION_COL = 'actual_me_consumption'
+ME_POWER_COL = 'actual_me_power'
+ME_RPM_COL = 'me_rpm'
+VESSEL_IMO_COL = 'vessel_imo'
+RUN_HOURS_COL = 'steaming_time_hrs'
+CURRENT_LOAD_COL = 'me_load_pct'
+CURRENT_SPEED_COL = 'observed_speed'
+STREAMING_HOURS_COL = 'steaming_time_hrs'
+REPORT_DATE_COL = 'reportdate'
+LOAD_TYPE_COL = 'load_type'
+VESSEL_NAME_COL = 'vessel_name'
+VESSEL_TYPE_COL = 'vessel_type'
+
+# Sidebar information
+st.sidebar.write("Data validation happened for the last 3 months.")
 
 # Supabase connection details
-supabase_password = "wXAryCC8%40iwNvj%23"  # URL-encoded password
-supabase_url = f"postgresql://postgres.conrxbcvuogbzfysomov:{supabase_password}@aws-0-ap-south-1.pooler.supabase.com:6543/postgres"
+supabase_host = "aws-0-ap-south-1.pooler.supabase.com"
+supabase_database = "postgres"
+supabase_user = "postgres.conrxbcvuogbzfysomov"
+supabase_password = "wXAryCC8@iwNvj#"
+supabase_port = "6543"
 
-# Create a SQLAlchemy engine to connect to Supabase
-engine = create_engine(supabase_url)
+# URL encode the password
+encoded_password = urllib.parse.quote(supabase_password)
 
-def convert_decimal_columns_to_float(spark_df: DataFrame) -> DataFrame:
-    """
-    Converts all DecimalType columns in a Spark DataFrame to FloatType to optimize conversion to Pandas DataFrame.
-    
-    Parameters:
-    spark_df (DataFrame): The input Spark DataFrame
-    
-    Returns:
-    DataFrame: The Spark DataFrame with all DecimalType columns converted to FloatType
-    """
-    for col_name, dtype in spark_df.dtypes:
-        if dtype.startswith('decimal'):
-            print(f"Converting column {col_name} from DecimalType to FloatType")
-            spark_df = spark_df.withColumn(col_name, spark_df[col_name].cast("float"))
-    
-    return spark_df
+# Function to create the SQLAlchemy engine using Supabase credentials
+@st.cache_resource
+def get_db_engine():
+    db_url = f"postgresql+psycopg2://{supabase_user}:{encoded_password}@{supabase_host}:{supabase_port}/{supabase_database}"
+    engine = create_engine(db_url)
+    return engine
 
-def push_dataframe_to_supabase(dataframe: DataFrame, table_name: str):
+# Fetch the data for the last 3 months from the vessel_performance_summary table
+def fetch_vessel_performance_data(engine):
+    query = """
+    SELECT * FROM vessel_performance_summary
+    WHERE reportdate >= %s;
     """
-    Converts a Spark DataFrame to Pandas and pushes it to a Supabase table.
-    
-    Parameters:
-    dataframe (DataFrame): The Spark DataFrame
-    table_name (str): The destination table name in Supabase
-    """
-    # Convert DecimalType columns to Float
-    dataframe = convert_decimal_columns_to_float(dataframe)
-    
-    # Convert Spark DataFrame to Pandas DataFrame
-    pandas_df = dataframe.toPandas()
+    three_months_ago = datetime.now() - timedelta(days=90)
+    df = pd.read_sql_query(query, engine, params=(three_months_ago,))
+    return df
 
-    # Push Pandas DataFrame to Supabase
-    pandas_df.to_sql(table_name, engine, if_exists="replace", index=False)
-    print(f"Table '{table_name}' pushed to Supabase successfully.")
+# Calculate average consumption for the last 30 non-null data points for each vessel and load type
+def calculate_avg_consumption(df, vessel_name, load_type):
+    vessel_df = df[(df[VESSEL_NAME_COL] == vessel_name) & (df[LOAD_TYPE_COL] == load_type)]
+    vessel_df = vessel_df.dropna(subset=[ME_CONSUMPTION_COL]).sort_values(by=REPORT_DATE_COL).tail(30)
 
-# Retry mechanism in case of Spark driver restarts
-def process_with_retry(sql_query: str, table_name: str, retries=3):
-    """
-    Execute a Spark SQL query, retrying in case of Spark driver restarts.
+    if not vessel_df.empty:
+        total_consumption = vessel_df[ME_CONSUMPTION_COL].sum()
+        total_steaming_time = vessel_df[RUN_HOURS_COL].sum()
+        if total_steaming_time > 0:
+            return total_consumption / total_steaming_time
+    return None
+
+# Run the validation logic for each vessel
+def validate_data(df):
+    validation_results = []
     
-    Parameters:
-    sql_query (str): The SQL query to execute
-    table_name (str): The table name for Supabase push
-    retries (int): Number of retries before giving up
-    """
-    attempt = 0
-    while attempt < retries:
-        try:
-            # Execute the SQL query and load the DataFrame
-            spark_df = spark.sql(sql_query)
+    for vessel_name, vessel_data in df.groupby(VESSEL_NAME_COL):
+        for _, row in vessel_data.iterrows():
+            failure_reasons = []
             
-            # Push the DataFrame to Supabase
-            push_dataframe_to_supabase(spark_df, table_name)
+            me_consumption = row[ME_CONSUMPTION_COL]
+            me_power = row[ME_POWER_COL]
+            me_rpm = row[ME_RPM_COL]
+            vessel_type = row[VESSEL_TYPE_COL]
+            run_hours = row[RUN_HOURS_COL]
+            load_type = row[LOAD_TYPE_COL]
             
-            # Exit the loop if successful
-            break
-        except Exception as e:
-            print(f"Error on attempt {attempt + 1}: {str(e)}")
-            attempt += 1
-            if attempt < retries:
-                print(f"Retrying... (Attempt {attempt + 1}/{retries})")
+            if me_consumption < 0 or me_consumption > 300:
+                failure_reasons.append("ME Consumption out of range")
+            
+            if me_consumption <= (250 / me_power * run_hours * 10**6):
+                failure_reasons.append("ME Consumption too high for the Reported power")
+            
+            if me_rpm > 0 and me_consumption == 0:
+                failure_reasons.append("ME Consumption cannot be zero when underway")
+            
+            if vessel_type.lower() == "container" and me_consumption > 150:
+                failure_reasons.append("ME Consumption too high for container vessel")
+            elif vessel_type.lower() != "container" and me_consumption > 60:
+                failure_reasons.append("ME Consumption too high for non-container vessel")
+
+            avg_consumption = calculate_avg_consumption(df, vessel_name, load_type)
+            if avg_consumption is not None:
+                if not (0.8 * avg_consumption <= me_consumption <= 1.2 * avg_consumption):
+                    failure_reasons.append(f"ME Consumption outside typical range of {load_type} condition")
+
+            if failure_reasons:
+                validation_results.append({
+                    'Vessel Name': vessel_name,
+                    'Report Date': row[REPORT_DATE_COL],
+                    'Remarks': ", ".join(failure_reasons)
+                })
+    
+    return validation_results
+
+# Main section of the Streamlit app
+st.title('ME Consumption Validation')
+
+# Button to validate data
+if st.button('Validate Data'):
+    engine = get_db_engine()
+
+    try:
+        df = fetch_vessel_performance_data(engine)
+        
+        if not df.empty:
+            validation_results = validate_data(df)
+            
+            if validation_results:
+                result_df = pd.DataFrame(validation_results)
+                st.write("Validation Results:")
+                st.dataframe(result_df)
+                
+                csv = result_df.to_csv(index=False)
+                st.download_button(label="Download validation report as CSV", data=csv, file_name='validation_report.csv', mime='text/csv')
             else:
-                print("Max retries reached. Exiting.")
-
-# Queries and tables
-queries_and_tables = [
-    ("SELECT * FROM reporting_layer.digital_desk.hull_performance", "hull_performance"),
-    ("SELECT * FROM reporting_layer.digital_desk.hull_performance_six_months", "hull_performance_six_months"),
-    ("SELECT * FROM reporting_layer.digital_desk.vessel_performance_coefficients", "vessel_performance_coefficients"),
-    ("SELECT * FROM reporting_layer.digital_desk.vessel_performance_summary", "vessel_performance_summary"),
-    ("SELECT * FROM reporting_layer.vessel_datahub.vessel_particulars", "vessel_particulars")
-]
-
-# Function to add vessel_name to vessel_performance_summary
-def add_vessel_name(spark_df: DataFrame, vessel_particulars_df: DataFrame) -> DataFrame:
-    """
-    Adds the vessel_name column to the vessel_performance_summary table by joining with vessel_particulars.
+                st.write("All data passed the validation checks!")
+        else:
+            st.write("No data found for the last 3 months.")
     
-    Parameters:
-    spark_df (DataFrame): The Spark DataFrame for vessel_performance_summary
-    vessel_particulars_df (DataFrame): The Spark DataFrame for vessel_particulars
-    
-    Returns:
-    DataFrame: The updated DataFrame with the vessel_name column
-    """
-    # Join the vessel_performance_summary with vessel_particulars on vessel_imo
-    updated_df = spark_df.join(vessel_particulars_df, spark_df["vessel_imo"] == vessel_particulars_df["vessel_imo"], "left_outer") \
-                         .select(spark_df["*"], vessel_particulars_df["vessel_name"])
-    
-    return updated_df
-
-# Modify the process_with_retry function to handle vessel_name addition
-def process_with_vessel_name(sql_query: str, table_name: str, vessel_particulars_df: DataFrame, retries=3):
-    """
-    Execute a Spark SQL query, add vessel_name by joining with vessel_particulars, and push the result to Supabase.
-    
-    Parameters:
-    sql_query (str): The SQL query to execute
-    table_name (str): The table name for Supabase push
-    vessel_particulars_df (DataFrame): The Spark DataFrame for vessel_particulars to add vessel_name
-    retries (int): Number of retries before giving up
-    """
-    attempt = 0
-    while attempt < retries:
-        try:
-            # Execute the SQL query and load the DataFrame
-            spark_df = spark.sql(sql_query)
-            
-            # If the table is vessel_performance_summary, add the vessel_name
-            if table_name == "vessel_performance_summary":
-                spark_df = add_vessel_name(spark_df, vessel_particulars_df)
-            
-            # Push the updated DataFrame to Supabase
-            push_dataframe_to_supabase(spark_df, table_name)
-            
-            # Exit the loop if successful
-            break
-        except Exception as e:
-            print(f"Error on attempt {attempt + 1}: {str(e)}")
-            attempt += 1
-            if attempt < retries:
-                print(f"Retrying... (Attempt {attempt + 1}/{retries})")
-            else:
-                print("Max retries reached. Exiting.")
-
-# Load the vessel_particulars table once and reuse it
-vessel_particulars_df = spark.sql("SELECT * FROM reporting_layer.vessel_datahub.vessel_particulars")
-
-# Process each table, passing the vessel_particulars_df for the vessel_performance_summary table
-for query, table in queries_and_tables:
-    process_with_vessel_name(query, table, vessel_particulars_df)
+    except Exception as e:
+        st.error(f"An error occurred: {str(e)}")
