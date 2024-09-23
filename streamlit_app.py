@@ -164,7 +164,7 @@ def validate_data(df):
             # Collect the result if any validation failed
             if failure_reason:
                 validation_results.append({
-                    'Vessel IMO': row[VESSEL_IMO_COL],
+                    'Vessel IMO': row[VESSEL_NAME_COL],
                     'Report Date': row[REPORT_DATE_COL],
                     'Remarks': ", ".join(failure_reason)
                 })
