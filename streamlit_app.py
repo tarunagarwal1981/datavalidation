@@ -67,6 +67,10 @@ def merge_vessel_type(df_performance, df_particulars):
     
     # Merge the two dataframes on the vessel_imo column
     merged_df = pd.merge(df_performance, df_particulars, left_on=VESSEL_IMO_COL, right_on=VESSEL_IMO_PARTICULARS_COL, how='left')
+    
+    # Verify if vessel_name exists after merging
+    if VESSEL_NAME_COL not in merged_df.columns:
+        st.error("Error: 'vessel_name' column is missing after merging. Check if the column exists in the vessel_particulars table.")
     return merged_df
 
 # Calculate average consumption for the last 30 non-null data points for each vessel and load type
@@ -118,7 +122,10 @@ def validate_data(df):
     grouped = df.groupby(VESSEL_IMO_COL)
 
     for vessel_imo, vessel_data in grouped:
-        vessel_name = vessel_data[VESSEL_NAME_COL].iloc[0]  # Get the vessel name from merged data
+        if VESSEL_NAME_COL in vessel_data.columns:
+            vessel_name = vessel_data[VESSEL_NAME_COL].iloc[0]  # Get the vessel name from merged data
+        else:
+            vessel_name = 'Unknown'  # Fallback if vessel_name is missing
         for index, row in vessel_data.iterrows():
             failure_reason = []
             try:
