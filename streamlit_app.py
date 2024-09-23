@@ -57,8 +57,6 @@ def fetch_vessel_type_data(engine):
     SELECT vessel_imo, vessel_name, vessel_type FROM vessel_particulars;
     """
     vessel_type_df = pd.read_sql_query(query, engine)
-    st.write("Vessel Particulars Columns:", vessel_type_df.columns)  # Debugging step
-    st.write("Vessel Particulars Sample Data:", vessel_type_df.head())  # Debugging step
     return vessel_type_df
 
 # Merge vessel type data with vessel performance data using vessel_imo
@@ -70,10 +68,7 @@ def merge_vessel_type(df_performance, df_particulars):
     # Merge the two dataframes on the vessel_imo column
     merged_df = pd.merge(df_performance, df_particulars, left_on=VESSEL_IMO_COL, right_on=VESSEL_IMO_PARTICULARS_COL, how='left')
     
-    # Debugging: Check columns after merging
-    st.write("Merged DataFrame Columns:", merged_df.columns)  # Debugging step
-    st.write("Merged DataFrame Sample Data:", merged_df.head())  # Debugging step
-    
+    # Verify if vessel_name exists after merging
     if VESSEL_NAME_COL not in merged_df.columns:
         st.error("Error: 'vessel_name' column is missing after merging. Check if the column exists in the vessel_particulars table.")
     return merged_df
