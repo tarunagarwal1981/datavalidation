@@ -99,7 +99,7 @@ def validate_data(df, coefficients_df):
             displacement = row[DISPLACEMENT_COL]
             streaming_hours = row[STREAMING_HOURS_COL]
             
-            if me_consumption < 0 or me_consumption > 20:
+            if me_consumption < 0 or me_consumption > 50:
                 failure_reasons.append("ME Consumption out of range")
             
             if me_consumption >= (250 * me_power * run_hours / 10**6):
@@ -108,9 +108,9 @@ def validate_data(df, coefficients_df):
             if me_rpm > 0 and me_consumption == 0:
                 failure_reasons.append("ME Consumption cannot be zero when underway")
             
-            if vessel_type == "CONTAINER" and me_consumption > 100:
+            if vessel_type == "CONTAINER" and me_consumption > 300:
                 failure_reasons.append("ME Consumption too high for container vessel")
-            elif vessel_type != "CONTAINER" and me_consumption > 20:
+            elif vessel_type != "CONTAINER" and me_consumption > 50:
                 failure_reasons.append("ME Consumption too high for non-container vessel")
 
             # Historical data comparison
