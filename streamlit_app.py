@@ -62,7 +62,7 @@ def fetch_vessel_coefficients(engine):
 # Function to fetch hull performance data
 def fetch_hull_performance_data(engine):
     query = """
-    SELECT vessel_name, hul_rough_power_loss_pct_ed
+    SELECT vessel_name, hull_rough_power_loss_pct_ed
     FROM hull_performance_six_months;
     """
     return pd.read_sql_query(query, engine)
@@ -97,7 +97,7 @@ def validate_data(df, coefficients_df, hull_performance_df):
         vessel_coefficients = coefficients_df[coefficients_df[VESSEL_NAME_COL] == vessel_name].iloc[0] if not coefficients_df[coefficients_df[VESSEL_NAME_COL] == vessel_name].empty else None
         
         # Get hull performance factor
-        hull_performance = hull_performance_df[hull_performance_df[VESSEL_NAME_COL] == vessel_name]['hul_rough_power_loss_pct_ed'].iloc[0] if not hull_performance_df[hull_performance_df[VESSEL_NAME_COL] == vessel_name].empty else 0
+        hull_performance = hull_performance_df[hull_performance_df[VESSEL_NAME_COL] == vessel_name]['hull_rough_power_loss_pct_ed'].iloc[0] if not hull_performance_df[hull_performance_df[VESSEL_NAME_COL] == vessel_name].empty else 0
         hull_performance_factor = 1 + (hull_performance / 100)
         
         for _, row in vessel_data.iterrows():
