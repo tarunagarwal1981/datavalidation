@@ -87,9 +87,9 @@ def validate_data(df):
             if me_rpm > 0 and me_consumption == 0:
                 failure_reasons.append("ME Consumption cannot be zero when underway")
             
-            if vessel_type == "CONTAINER" and me_consumption > 100:
+            if vessel_type == "CONTAINER" and me_consumption > 150:
                 failure_reasons.append("ME Consumption too high for container vessel")
-            elif vessel_type != "CONTAINER" and me_consumption > 20:
+            elif vessel_type != "CONTAINER" and me_consumption > 500:
                 failure_reasons.append("ME Consumption too high for non-container vessel")
 
             # # Historical data comparison
