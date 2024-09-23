@@ -65,23 +65,8 @@ def merge_vessel_type(df_performance, df_particulars):
     df_performance[VESSEL_IMO_COL] = df_performance[VESSEL_IMO_COL].astype(str)
     df_particulars[VESSEL_IMO_PARTICULARS_COL] = df_particulars[VESSEL_IMO_PARTICULARS_COL].astype(str)
     
-    # Debug: Print column names before merging
-    st.write("Columns in df_performance:", df_performance.columns.tolist())
-    st.write("Columns in df_particulars:", df_particulars.columns.tolist())
-    
     # Merge the two dataframes on the vessel_imo column
-    merged_df = pd.merge(df_performance, df_particulars[[VESSEL_IMO_PARTICULARS_COL, VESSEL_NAME_COL, VESSEL_TYPE_COL]], 
-                         left_on=VESSEL_IMO_COL, right_on=VESSEL_IMO_PARTICULARS_COL, how='left')
-    
-    # Debug: Print column names after merging
-    st.write("Columns in merged_df:", merged_df.columns.tolist())
-    
-    # Verify if vessel_name exists after merging
-    if VESSEL_NAME_COL not in merged_df.columns:
-        st.error(f"Error: '{VESSEL_NAME_COL}' column is missing after merging. Check if the column exists in the vessel_particulars table.")
-        # If vessel_name is missing, create a placeholder column
-        merged_df[VESSEL_NAME_COL] = "Unknown Vessel"
-    
+    merged_df = pd.merge(df_performance, df_particulars, left_on=VESSEL_IMO_COL, right_on=VESSEL_IMO_PARTICULARS_COL, how='left')
     return merged_df
 
 # Calculate average consumption for the last 30 non-null data points for each vessel and load type
@@ -129,10 +114,11 @@ def validate_data(df):
         })
         return validation_results
 
-    # Group by vessel name instead of IMO
-    grouped = df.groupby(VESSEL_NAME_COL)
+    # Group by vessel IMO and apply validation to each group
+    grouped = df.groupby(VESSEL_IMO_COL)
 
-    for vessel_name, vessel_data in grouped:
+    for vessel_imo, vessel_data in grouped:
+        vessel_name = vessel_data[VESSEL_NAME_COL].iloc[0]  # Get the vessel name from merged data
         for index, row in vessel_data.iterrows():
             failure_reason = []
             try:
@@ -145,7 +131,6 @@ def validate_data(df):
                 current_speed = row[CURRENT_SPEED_COL]
                 streaming_hours = row[STREAMING_HOURS_COL]
                 load_type = row[LOAD_TYPE_COL]
-                vessel_imo = row[VESSEL_IMO_COL]  # We still need IMO for average consumption calculation
             except KeyError as e:
                 failure_reason.append(f"Missing required column: {str(e)}")
                 continue
@@ -186,23 +171,19 @@ st.title('ME Consumption Validation')
 
 # Button to validate data
 if st.button('Validate Data'):
+    # Create the database engine using SQLAlchemy
     engine = get_db_engine()
 
     try:
+        # Fetch data from vessel performance and particulars tables
         df_performance = fetch_vessel_performance_data(engine)
         df_particulars = fetch_vessel_type_data(engine)
 
-        # Debug: Print sample data from df_particulars
-        st.write("Sample data from vessel_particulars:")
-        st.write(df_particulars.head())
-
+        # Merge vessel type from particulars into the performance data using vessel_imo
         df = merge_vessel_type(df_performance, df_particulars)
         
         if not df.empty:
-            # Debug: Print sample data from merged dataframe
-            st.write("Sample data from merged dataframe:")
-            st.write(df.head())
-
+            # Validate the data for each vessel group
             validation_results = validate_data(df)
             
             if validation_results:
@@ -210,6 +191,7 @@ if st.button('Validate Data'):
                 st.write("Validation Results:")
                 st.dataframe(result_df)
                 
+                # Option to download results as CSV
                 csv = result_df.to_csv(index=False)
                 st.download_button(label="Download validation report as CSV", data=csv, file_name='validation_report.csv', mime='text/csv')
             else:
