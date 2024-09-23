@@ -38,11 +38,13 @@ def get_db_engine():
     engine = create_engine(db_url)
     return engine
 
-# Fetch the data for the last 3 months from the vessel_performance_summary table
+# Fetch the data for the last 3 months from the vessel_performance_summary table and join with vessel_particulars
 def fetch_vessel_performance_data(engine):
     query = """
-    SELECT * FROM vessel_performance_summary
-    WHERE reportdate >= %s;
+    SELECT vps.*, vp.vessel_type
+    FROM vessel_performance_summary vps
+    LEFT JOIN vessel_particulars vp ON vps.vessel_name = vp.vessel_name
+    WHERE vps.reportdate >= %s;
     """
     three_months_ago = datetime.now() - timedelta(days=90)
     df = pd.read_sql_query(query, engine, params=(three_months_ago,))
@@ -65,13 +67,13 @@ def validate_data(df):
     validation_results = []
     
     for vessel_name, vessel_data in df.groupby(VESSEL_NAME_COL):
+        vessel_type = vessel_data[VESSEL_TYPE_COL].iloc[0]  # Get vessel type for this vessel
         for _, row in vessel_data.iterrows():
             failure_reasons = []
             
             me_consumption = row[ME_CONSUMPTION_COL]
             me_power = row[ME_POWER_COL]
             me_rpm = row[ME_RPM_COL]
-            vessel_type = row[VESSEL_TYPE_COL]
             run_hours = row[RUN_HOURS_COL]
             load_type = row[LOAD_TYPE_COL]
             
