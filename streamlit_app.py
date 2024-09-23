@@ -51,18 +51,19 @@ def fetch_vessel_performance_data(engine):
     df = pd.read_sql_query(query, engine, params=(three_months_ago,))
     return df
 
-def fetch_hull_performance_data(engine):
-    query = """
-    SELECT vessel_name, hul_rough_power_loss_pct_ed
-    FROM hull_performance_six_months;
-    """
-    return pd.read_sql_query(query, engine)
-
-# New function to fetch vessel performance coefficients
+# Function to fetch vessel performance coefficients
 def fetch_vessel_coefficients(engine):
     query = """
     SELECT *
     FROM vessel_performance_coefficients;
+    """
+    return pd.read_sql_query(query, engine)
+
+# Function to fetch hull performance data
+def fetch_hull_performance_data(engine):
+    query = """
+    SELECT vessel_name, hul_rough_power_loss_pct_ed
+    FROM hull_performance_six_months;
     """
     return pd.read_sql_query(query, engine)
 
@@ -87,11 +88,12 @@ def calculate_expected_consumption(coefficients, speed, displacement, hull_perfo
                         coefficients['consp_intercept'])
     return base_consumption * hull_performance_factor
 
+# Run the validation logic for each vessel
 def validate_data(df, coefficients_df, hull_performance_df):
     validation_results = []
     
     for vessel_name, vessel_data in df.groupby(VESSEL_NAME_COL):
-        vessel_type = vessel_data[VESSEL_TYPE_COL].iloc[0]
+        vessel_type = vessel_data[VESSEL_TYPE_COL].iloc[0]  # Get vessel type for this vessel
         vessel_coefficients = coefficients_df[coefficients_df[VESSEL_NAME_COL] == vessel_name].iloc[0] if not coefficients_df[coefficients_df[VESSEL_NAME_COL] == vessel_name].empty else None
         
         # Get hull performance factor
@@ -130,11 +132,13 @@ def validate_data(df, coefficients_df, hull_performance_df):
                 if not (0.8 * avg_consumption <= me_consumption <= 1.2 * avg_consumption):
                     failure_reasons.append(f"ME Consumption outside typical range of {load_type} condition")
 
-            # New validation: Expected consumption
+            # Expected consumption validation with hull performance
             if vessel_coefficients is not None and streaming_hours > 0:
-                expected_consumption = calculate_expected_consumption(vessel_coefficients, observed_speed, displacement)
+                expected_consumption = calculate_expected_consumption(
+                    vessel_coefficients, observed_speed, displacement, hull_performance_factor
+                )
                 if not (0.8 * expected_consumption <= me_consumption <= 1.2 * expected_consumption):
-                    failure_reasons.append("ME Consumption not aligned with speed consumption table")
+                    failure_reasons.append("ME Consumption not aligned with speed consumption table (including hull performance)")
 
             if failure_reasons:
                 validation_results.append({
@@ -155,9 +159,10 @@ if st.button('Validate Data'):
     try:
         df = fetch_vessel_performance_data(engine)
         coefficients_df = fetch_vessel_coefficients(engine)
+        hull_performance_df = fetch_hull_performance_data(engine)
         
         if not df.empty:
-            validation_results = validate_data(df, coefficients_df)
+            validation_results = validate_data(df, coefficients_df, hull_performance_df)
             
             if validation_results:
                 result_df = pd.DataFrame(validation_results)
