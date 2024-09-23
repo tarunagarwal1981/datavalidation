@@ -17,6 +17,7 @@ REPORT_DATE_COL = 'reportdate'
 LOAD_TYPE_COL = 'load_type'
 VESSEL_NAME_COL = 'vessel_name'
 VESSEL_TYPE_COL = 'vessel_type'
+DISPLACEMENT_COL = 'displacement'
 
 # Sidebar information
 st.sidebar.write("Data validation happened for the last 3 months.")
@@ -50,6 +51,14 @@ def fetch_vessel_performance_data(engine):
     df = pd.read_sql_query(query, engine, params=(three_months_ago,))
     return df
 
+# New function to fetch vessel performance coefficients
+def fetch_vessel_coefficients(engine):
+    query = """
+    SELECT *
+    FROM vessel_performance_coefficients;
+    """
+    return pd.read_sql_query(query, engine)
+
 # Calculate average consumption for the last 30 non-null data points for each vessel and load type
 def calculate_avg_consumption(vessel_df, load_type):
     relevant_data = vessel_df[vessel_df[LOAD_TYPE_COL] == load_type].dropna(subset=[ME_CONSUMPTION_COL])
@@ -62,12 +71,21 @@ def calculate_avg_consumption(vessel_df, load_type):
             return total_consumption / total_steaming_time
     return None
 
+# Function to calculate expected consumption
+def calculate_expected_consumption(coefficients, speed, displacement):
+    return (coefficients['CONSP_SPEED1'] * speed +
+            coefficients['CONSP_DISP1'] * displacement +
+            coefficients['CONSP_SPEED2'] * speed**2 +
+            coefficients['CONSP_DISP2'] * displacement**2 +
+            coefficients['CONSP_INTERCEPT'])
+
 # Run the validation logic for each vessel
-def validate_data(df):
+def validate_data(df, coefficients_df):
     validation_results = []
     
     for vessel_name, vessel_data in df.groupby(VESSEL_NAME_COL):
         vessel_type = vessel_data[VESSEL_TYPE_COL].iloc[0]  # Get vessel type for this vessel
+        vessel_coefficients = coefficients_df[coefficients_df[VESSEL_NAME_COL] == vessel_name].iloc[0] if not coefficients_df[coefficients_df[VESSEL_NAME_COL] == vessel_name].empty else None
         
         for _, row in vessel_data.iterrows():
             failure_reasons = []
@@ -77,8 +95,11 @@ def validate_data(df):
             me_rpm = row[ME_RPM_COL]
             run_hours = row[RUN_HOURS_COL]
             load_type = row[LOAD_TYPE_COL]
+            observed_speed = row[CURRENT_SPEED_COL]
+            displacement = row[DISPLACEMENT_COL]
+            streaming_hours = row[STREAMING_HOURS_COL]
             
-            if me_consumption < 0 or me_consumption > 250:
+            if me_consumption < 0 or me_consumption > 20:
                 failure_reasons.append("ME Consumption out of range")
             
             if me_consumption >= (250 * me_power * run_hours / 10**6):
@@ -87,9 +108,9 @@ def validate_data(df):
             if me_rpm > 0 and me_consumption == 0:
                 failure_reasons.append("ME Consumption cannot be zero when underway")
             
-            if vessel_type == "CONTAINER" and me_consumption > 300:
+            if vessel_type == "CONTAINER" and me_consumption > 100:
                 failure_reasons.append("ME Consumption too high for container vessel")
-            elif vessel_type != "CONTAINER" and me_consumption > 50:
+            elif vessel_type != "CONTAINER" and me_consumption > 20:
                 failure_reasons.append("ME Consumption too high for non-container vessel")
 
             # Historical data comparison
@@ -97,6 +118,12 @@ def validate_data(df):
             if avg_consumption is not None:
                 if not (0.8 * avg_consumption <= me_consumption <= 1.2 * avg_consumption):
                     failure_reasons.append(f"ME Consumption outside typical range of {load_type} condition")
+
+            # New validation: Expected consumption
+            if vessel_coefficients is not None and streaming_hours > 0:
+                expected_consumption = calculate_expected_consumption(vessel_coefficients, observed_speed, displacement)
+                if not (0.8 * expected_consumption <= me_consumption <= 1.2 * expected_consumption):
+                    failure_reasons.append("ME Consumption not aligned with speed consumption table")
 
             if failure_reasons:
                 validation_results.append({
@@ -116,9 +143,10 @@ if st.button('Validate Data'):
 
     try:
         df = fetch_vessel_performance_data(engine)
+        coefficients_df = fetch_vessel_coefficients(engine)
         
         if not df.empty:
-            validation_results = validate_data(df)
+            validation_results = validate_data(df, coefficients_df)
             
             if validation_results:
                 result_df = pd.DataFrame(validation_results)
