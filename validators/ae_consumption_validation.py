@@ -65,11 +65,12 @@ def validate_ae_consumption(row, vessel_data):
         # Historical comparison
         historical_data = calculate_historical_average(vessel_data)
         if historical_data:
-            avg_consumption = historical_data
-            if not is_value_within_percentage(ae_consumption, avg_consumption, 
-                                              VALIDATION_THRESHOLDS['historical_lower'], 
-                                              VALIDATION_THRESHOLDS['historical_upper']):
-                failure_reasons.append("AE Consumption outside typical range")
+            avg_consumption = historical_data.get(row['vessel_name'])
+            if avg_consumption is not None:
+                if not is_value_within_percentage(ae_consumption, avg_consumption, 
+                                                  VALIDATION_THRESHOLDS['historical_lower'], 
+                                                  VALIDATION_THRESHOLDS['historical_upper']):
+                    failure_reasons.append("AE Consumption outside typical range")
 
         # Check if total AE Consumption is zero (assuming no shaft generator)
         if ae_consumption == 0:
