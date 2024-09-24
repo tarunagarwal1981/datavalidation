@@ -2,7 +2,7 @@ from sqlalchemy import create_engine
 import pandas as pd
 from datetime import datetime, timedelta
 import urllib.parse
-from app.config import DB_CONFIG, COLUMN_NAMES
+from config import DB_CONFIG, COLUMN_NAMES
 
 def get_db_engine():
     encoded_password = urllib.parse.quote(DB_CONFIG['password'])
