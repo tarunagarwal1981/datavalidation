@@ -41,7 +41,7 @@ def validate_boiler_consumption(row, mcr_value):
             failure_reasons.append("Boiler Consumption out of range")
 
         # For now, we're considering Cargo Heating as 0
-        cargo_heating = 0
+        cargo_heating = 30
         if boiler_consumption < cargo_heating:
             failure_reasons.append("Boiler Consumption cannot be less than Cargo Heating Consumption")
 
