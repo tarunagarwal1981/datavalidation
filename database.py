@@ -19,25 +19,22 @@ def get_db_engine():
 
 def fetch_vessel_performance_data(engine):
     query = """
-    WITH ranked_logs AS (
-        SELECT 
-            vps.*, 
-            vp.vessel_type,
-            sl.LATITUDE,
-            sl.LONGITUDE,
-            ROW_NUMBER() OVER (PARTITION BY vps.vessel_name ORDER BY vps.reportdate) as row_num
-        FROM vessel_performance_summary vps
-        LEFT JOIN vessel_particulars vp ON vps.vessel_name = vp.vessel_name
-        LEFT JOIN sf_consumption_logs sl ON vps.vessel_name = sl.VESSEL_NAME AND vps.reportdate = sl.reportdate
-        WHERE vps.reportdate >= %s
-    )
-    SELECT 
-        r1.*,
-        r2.LATITUDE as prev_LATITUDE,
-        r2.LONGITUDE as prev_LONGITUDE
-    FROM ranked_logs r1
-    LEFT JOIN ranked_logs r2 ON r1.vessel_name = r2.vessel_name AND r1.row_num = r2.row_num + 1
-    ORDER BY r1.vessel_name, r1.reportdate;
+    SELECT vps.*, vp.vessel_type
+    FROM vessel_performance_summary vps
+    LEFT JOIN vessel_particulars vp ON vps.vessel_name = vp.vessel_name
+    WHERE vps.reportdate >= %s
+    ORDER BY vps.vessel_name, vps.reportdate;
+    """
+    three_months_ago = datetime.now() - timedelta(days=90)
+    df = pd.read_sql_query(query, engine, params=(three_months_ago,))
+    return df
+
+def fetch_sf_consumption_logs(engine):
+    query = """
+    SELECT *
+    FROM sf_consumption_logs
+    WHERE reportdate >= %s
+    ORDER BY reportdate;
     """
     three_months_ago = datetime.now() - timedelta(days=90)
     df = pd.read_sql_query(query, engine, params=(three_months_ago,))
@@ -65,17 +62,15 @@ def fetch_mcr_data(engine):
     """
     return pd.read_sql_query(query, engine)
 
-def fetch_sf_consumption_logs(engine):
-    query = """
-    SELECT 
-        VESSEL_NAME,
-        reportdate,
-        LATITUDE,
-        LONGITUDE
-    FROM sf_consumption_logs
-    WHERE reportdate >= %s
-    ORDER BY VESSEL_NAME, reportdate;
-    """
-    three_months_ago = datetime.now() - timedelta(days=90)
-    df = pd.read_sql_query(query, engine, params=(three_months_ago,))
-    return df
+def merge_vessel_and_consumption_data(vessel_df, consumption_df):
+    # Assuming there's a common column to join on, like 'vessel_name' and 'reportdate'
+    # Adjust the column names as necessary
+    merged_df = pd.merge(vessel_df, consumption_df, 
+                         on=['vessel_name', 'reportdate'], 
+                         how='left')
+    
+    # Add previous latitude and longitude
+    merged_df['prev_LATITUDE'] = merged_df.groupby('vessel_name')['LATITUDE'].shift(1)
+    merged_df['prev_LONGITUDE'] = merged_df.groupby('vessel_name')['LONGITUDE'].shift(1)
+    
+    return merged_df
