@@ -1,5 +1,6 @@
 from .me_consumption_validation import validate_me_consumption
 from .ae_consumption_validation import validate_ae_consumption
+from config import COLUMN_NAMES
 
 # Import other validation functions as you create them
 
