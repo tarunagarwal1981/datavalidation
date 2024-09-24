@@ -49,3 +49,29 @@ def fetch_mcr_data(engine):
     FROM machinery_particulars;
     """
     return pd.read_sql_query(query, engine)
+
+def fetch_vessel_performance_data(engine):
+    query = """
+    WITH ranked_logs AS (
+        SELECT 
+            vps.*, 
+            vp.vessel_type,
+            sl.LATITUDE,
+            sl.LONGITUDE,
+            ROW_NUMBER() OVER (PARTITION BY vps.vessel_name ORDER BY vps.reportdate) as row_num
+        FROM vessel_performance_summary vps
+        LEFT JOIN vessel_particulars vp ON vps.vessel_name = vp.vessel_name
+        LEFT JOIN sf_consumption_logs sl ON vps.vessel_name = sl.vessel_name AND vps.reportdate = sl.reportdate
+        WHERE vps.reportdate >= %s
+    )
+    SELECT 
+        r1.*,
+        r2.LATITUDE as prev_LATITUDE,
+        r2.LONGITUDE as prev_LONGITUDE
+    FROM ranked_logs r1
+    LEFT JOIN ranked_logs r2 ON r1.vessel_name = r2.vessel_name AND r1.row_num = r2.row_num + 1
+    ORDER BY r1.vessel_name, r1.reportdate;
+    """
+    three_months_ago = datetime.now() - timedelta(days=90)
+    df = pd.read_sql_query(query, engine, params=(three_months_ago,))
+    return df
