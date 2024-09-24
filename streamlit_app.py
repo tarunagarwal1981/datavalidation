@@ -1,8 +1,8 @@
 import streamlit as st
 import pandas as pd
-from app.database import get_db_engine, fetch_vessel_performance_data, fetch_vessel_coefficients, fetch_hull_performance_data
-from app.validators import run_all_validations
-from app.config import COLUMN_NAMES
+from database import get_db_engine, fetch_vessel_performance_data, fetch_vessel_coefficients, fetch_hull_performance_data
+from validators import run_all_validations
+from config import COLUMN_NAMES
 
 st.title('Vessel Data Validation')
 
