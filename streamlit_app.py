@@ -34,5 +34,3 @@ if st.button('Validate Data'):
     
     except Exception as e:
         st.error(f"An error occurred: {str(e)}")
-
-# You can add more Streamlit UI components here as needed
