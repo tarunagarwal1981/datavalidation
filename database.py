@@ -65,10 +65,15 @@ def fetch_mcr_data(engine):
     return pd.read_sql_query(query, engine)
 
 def merge_vessel_and_consumption_data(vessel_df, consumption_df):
+    # Rename columns in consumption_df to match vessel_df
+    consumption_df = consumption_df.rename(columns={
+        'VESSEL_NAME': 'vessel_name',
+        'REPORT_DATE': 'reportdate'
+    })
+    
     # Merge the dataframes
     merged_df = pd.merge(vessel_df, consumption_df, 
-                         left_on=['vessel_name', 'reportdate'], 
-                         right_on=['VESSEL_NAME', 'REPORT_DATE'], 
+                         on=['vessel_name', 'reportdate'], 
                          how='left')
     
     # Add previous latitude and longitude if they exist
