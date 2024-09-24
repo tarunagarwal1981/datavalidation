@@ -12,8 +12,8 @@ VALIDATION_THRESHOLDS = {
     'min': 0,
     'max': 50,
     'power_factor': 300,
-    'historical_lower': 0.9,
-    'historical_upper': 1.1
+    'historical_lower': 0.8,
+    'historical_upper': 1.2
 }
 
 # Utility functions
@@ -34,8 +34,8 @@ def calculate_historical_average(df, days=30):
 def is_value_within_percentage(value, reference, lower_percentage, upper_percentage):
     if pd.isna(value) or pd.isna(reference):
         return False
-    lower_bound = reference * (1 - lower_percentage)
-    upper_bound = reference * (1 + upper_percentage)
+    lower_bound = reference * (lower_percentage)
+    upper_bound = reference * (upper_percentage)
     return lower_bound <= value <= upper_bound
 
 def calculate_power_based_consumption(power, run_hours, factor):
