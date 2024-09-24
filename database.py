@@ -39,14 +39,18 @@ def fetch_sf_consumption_logs(engine):
     three_months_ago = datetime.now() - timedelta(days=90)
     df = pd.read_sql_query(query, engine, params=(three_months_ago,))
     
-    # Rename columns to match expected names
+    # Print column names for debugging
+    print("Columns in sf_consumption_logs:", df.columns.tolist())
+    
+    # Rename columns to match expected names (case-insensitive)
     column_mapping = {
-        'VESSEL_NAME': 'vessel_name',
-        'REPORT_DATE': 'reportdate',
-        'LATITUDE': 'latitude',
-        'LONGITUDE': 'longitude'
+        'vessel_name': 'vessel_name',
+        'report_date': 'reportdate',
+        'latitude': 'latitude',
+        'longitude': 'longitude'
     }
-    df = df.rename(columns={col: column_mapping.get(col, col) for col in df.columns})
+    df.columns = [col.lower() for col in df.columns]
+    df = df.rename(columns=column_mapping)
     
     return df
 
@@ -73,13 +77,20 @@ def fetch_mcr_data(engine):
     return pd.read_sql_query(query, engine)
 
 def merge_vessel_and_consumption_data(vessel_df, consumption_df):
+    # Print column names for debugging
+    print("Columns in vessel_df:", vessel_df.columns.tolist())
+    print("Columns in consumption_df:", consumption_df.columns.tolist())
+    
     # Merge the dataframes
     merged_df = pd.merge(vessel_df, consumption_df, 
                          on=['vessel_name', 'reportdate'], 
                          how='left')
     
     # Add previous latitude and longitude
-    merged_df['prev_latitude'] = merged_df.groupby('vessel_name')['latitude'].shift(1)
-    merged_df['prev_longitude'] = merged_df.groupby('vessel_name')['longitude'].shift(1)
+    if 'latitude' in merged_df.columns and 'longitude' in merged_df.columns:
+        merged_df['prev_latitude'] = merged_df.groupby('vessel_name')['latitude'].shift(1)
+        merged_df['prev_longitude'] = merged_df.groupby('vessel_name')['longitude'].shift(1)
+    else:
+        print("Warning: 'latitude' and/or 'longitude' columns not found in merged dataframe")
     
     return merged_df
