@@ -1,15 +1,65 @@
 import pandas as pd
-from config import VALIDATION_THRESHOLDS, COLUMN_NAMES
-from utils.validation_utils import (
-    is_value_in_range, 
-    calculate_power_based_consumption, 
-    is_value_within_percentage,
-    add_failure_reason,
-    validate_non_negative,
-    calculate_expected_consumption
-)
 
-def validate_me_consumption(row, vessel_type, historical_data, vessel_coefficients, hull_performance_factor):
+# Configuration
+COLUMN_NAMES = {
+    'ME_CONSUMPTION': 'actual_me_consumption',
+    'ME_POWER': 'actual_me_power',
+    'ME_RPM': 'me_rpm',
+    'RUN_HOURS': 'steaming_time_hrs',
+    'LOAD_TYPE': 'load_type',
+    'CURRENT_SPEED': 'observed_speed',
+    'DISPLACEMENT': 'displacement',
+    'STREAMING_HOURS': 'steaming_time_hrs',
+    'REPORT_DATE': 'reportdate'
+}
+
+VALIDATION_THRESHOLDS = {
+    'min': 0,
+    'max': 50,
+    'power_factor': 250,
+    'container_max': 300,
+    'non_container_max': 50,
+    'historical_lower': 0.8,
+    'historical_upper': 1.2,
+    'expected_lower': 0.8,
+    'expected_upper': 1.2
+}
+
+# Utility functions
+def is_value_in_range(value, min_val, max_val):
+    return min_val <= value <= max_val if pd.notna(value) else False
+
+def calculate_historical_average(df, days=30):
+    def calculate_avg_consumption(group):
+        relevant_data = group.sort_values(COLUMN_NAMES['REPORT_DATE']).tail(days)
+        if len(relevant_data) >= 10:
+            total_consumption = relevant_data[COLUMN_NAMES['ME_CONSUMPTION']].sum()
+            total_steaming_time = relevant_data[COLUMN_NAMES['RUN_HOURS']].sum()
+            if total_steaming_time > 0:
+                return total_consumption / total_steaming_time
+        return None
+    return df.groupby('vessel_name').apply(calculate_avg_consumption).to_dict()
+
+def is_value_within_percentage(value, reference, lower_percentage, upper_percentage):
+    if pd.isna(value) or pd.isna(reference):
+        return False
+    lower_bound = reference * (1 - lower_percentage)
+    upper_bound = reference * (1 + upper_percentage)
+    return lower_bound <= value <= upper_bound
+
+def calculate_power_based_consumption(power, run_hours, factor):
+    return (factor / power) * run_hours / 10**6 if pd.notna(power) and pd.notna(run_hours) and power > 0 else None
+
+def calculate_expected_consumption(coefficients, speed, displacement, hull_performance_factor):
+    base_consumption = (coefficients['consp_speed1'] * speed +
+                        coefficients['consp_disp1'] * displacement +
+                        coefficients['consp_speed2'] * speed**2 +
+                        coefficients['consp_disp2'] * displacement**2 +
+                        coefficients['consp_intercept'])
+    return base_consumption * hull_performance_factor
+
+# Main validation function
+def validate_me_consumption(row, vessel_data, vessel_type, vessel_coefficients, hull_performance_factor):
     failure_reasons = []
     me_consumption = row[COLUMN_NAMES['ME_CONSUMPTION']]
     me_power = row[COLUMN_NAMES['ME_POWER']]
@@ -22,30 +72,31 @@ def validate_me_consumption(row, vessel_type, historical_data, vessel_coefficien
 
     if pd.notna(me_consumption):
         # Check range
-        if not is_value_in_range(me_consumption, VALIDATION_THRESHOLDS['me_consumption']['min'], VALIDATION_THRESHOLDS['me_consumption']['max']):
-            add_failure_reason(failure_reasons, "ME Consumption out of range")
+        if not is_value_in_range(me_consumption, VALIDATION_THRESHOLDS['min'], VALIDATION_THRESHOLDS['max']):
+            failure_reasons.append("ME Consumption out of range")
         
         # Check against power-based calculation
-        max_allowed_consumption = calculate_power_based_consumption(me_power, run_hours, VALIDATION_THRESHOLDS['me_consumption']['power_factor'])
+        max_allowed_consumption = calculate_power_based_consumption(me_power, run_hours, VALIDATION_THRESHOLDS['power_factor'])
         if max_allowed_consumption and me_consumption > max_allowed_consumption:
-            add_failure_reason(failure_reasons, "ME Consumption too high for the Reported power")
+            failure_reasons.append("ME Consumption too high for the Reported power")
         
         # Check if zero when underway
         if pd.notna(me_rpm) and me_rpm > 0 and me_consumption == 0:
-            add_failure_reason(failure_reasons, "ME Consumption cannot be zero when underway")
+            failure_reasons.append("ME Consumption cannot be zero when underway")
         
         # Check against vessel type limits
-        max_limit = VALIDATION_THRESHOLDS['me_consumption']['container_max'] if vessel_type == "CONTAINER" else VALIDATION_THRESHOLDS['me_consumption']['non_container_max']
+        max_limit = VALIDATION_THRESHOLDS['container_max'] if vessel_type == "CONTAINER" else VALIDATION_THRESHOLDS['non_container_max']
         if me_consumption > max_limit:
-            add_failure_reason(failure_reasons, f"ME Consumption too high for {vessel_type} vessel")
+            failure_reasons.append(f"ME Consumption too high for {vessel_type.lower()} vessel")
 
         # Historical comparison
-        if historical_data and 'avg_me_consumption' in historical_data:
-            avg_consumption = historical_data['avg_me_consumption']
+        historical_data = calculate_historical_average(vessel_data)
+        if historical_data:
+            avg_consumption = historical_data
             if not is_value_within_percentage(me_consumption, avg_consumption, 
-                                              VALIDATION_THRESHOLDS['me_consumption']['historical_lower'], 
-                                              VALIDATION_THRESHOLDS['me_consumption']['historical_upper']):
-                add_failure_reason(failure_reasons, f"ME Consumption outside typical range of {load_type} condition")
+                                              VALIDATION_THRESHOLDS['historical_lower'], 
+                                              VALIDATION_THRESHOLDS['historical_upper']):
+                failure_reasons.append(f"ME Consumption outside typical range of {load_type} condition")
 
         # Expected consumption validation with hull performance
         if vessel_coefficients is not None and streaming_hours > 0:
@@ -56,16 +107,15 @@ def validate_me_consumption(row, vessel_type, historical_data, vessel_coefficien
                 hull_performance_factor
             )
             if not is_value_within_percentage(me_consumption, expected_consumption,
-                                              VALIDATION_THRESHOLDS['me_consumption']['expected_lower'],
-                                              VALIDATION_THRESHOLDS['me_consumption']['expected_upper']):
-                add_failure_reason(failure_reasons, "ME Consumption not aligned with speed consumption table (including hull performance)")
+                                              VALIDATION_THRESHOLDS['expected_lower'],
+                                              VALIDATION_THRESHOLDS['expected_upper']):
+                failure_reasons.append("ME Consumption not aligned with speed consumption table (including hull performance)")
 
     else:
-        add_failure_reason(failure_reasons, "ME Consumption data is missing")
+        failure_reasons.append("ME Consumption data is missing")
 
     # Check for negative values
-    negative_check = validate_non_negative(me_consumption, "ME Consumption")
-    if negative_check:
-        add_failure_reason(failure_reasons, negative_check)
+    if pd.notna(me_consumption) and me_consumption < 0:
+        failure_reasons.append("ME Consumption cannot be negative")
 
     return failure_reasons
