@@ -1,9 +1,8 @@
 import streamlit as st
 import pandas as pd
-from database import get_db_engine, fetch_vessel_performance_data, fetch_vessel_coefficients, fetch_hull_performance_data, fetch_mcr_data
-from validators.me_consumption_validation import validate_me_consumption
+from validators.me_consumption_validation import validate_me_consumption, fetch_vessel_performance_data, fetch_vessel_coefficients, fetch_hull_performance_data
 from validators.ae_consumption_validation import validate_ae_consumption
-from validators.boiler_consumption_validation import validate_boiler_consumption
+from validators.boiler_consumption_validation import validate_boiler_consumption, fetch_mcr_data
 
 st.title('Vessel Data Validation')
 
@@ -11,13 +10,11 @@ st.title('Vessel Data Validation')
 st.sidebar.write("Data validation happened for the last 3 months.")
 
 if st.button('Validate Data'):
-    engine = get_db_engine()
-
     try:
-        df = fetch_vessel_performance_data(engine)
-        coefficients_df = fetch_vessel_coefficients(engine)
-        hull_performance_df = fetch_hull_performance_data(engine)
-        mcr_df = fetch_mcr_data(engine)
+        df = fetch_vessel_performance_data()
+        coefficients_df = fetch_vessel_coefficients()
+        hull_performance_df = fetch_hull_performance_data()
+        mcr_df = fetch_mcr_data()
         
         if not df.empty:
             validation_results = []
