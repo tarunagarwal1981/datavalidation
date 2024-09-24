@@ -29,6 +29,7 @@ if st.button('Validate Data'):
                 hull_performance = hull_performance_df[hull_performance_df['vessel_name'] == vessel_name]['hull_rough_power_loss_pct_ed'].iloc[0] if not hull_performance_df[hull_performance_df['vessel_name'] == vessel_name].empty else 0
                 hull_performance_factor = 1 + (hull_performance / 100)
                 
+                # Use the correct column name "Vessel_Name" for mcr_df
                 mcr_value = mcr_df[mcr_df['Vessel_Name'] == vessel_name]['ME_1_MCR_kW'].iloc[0] if not mcr_df[mcr_df['Vessel_Name'] == vessel_name].empty else None
                 
                 for _, row in vessel_data.iterrows():
