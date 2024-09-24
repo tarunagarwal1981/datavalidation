@@ -36,3 +36,21 @@ COLUMN_NAMES = {
     'DISPLACEMENT': 'displacement',
     'HULL_PERFORMANCE': 'hull_rough_power_loss_pct_ed'
 }
+
+
+COLUMN_NAMES.update({
+    'AE_CONSUMPTION': 'aux_engine_consumption',
+    'AVG_AE_POWER': 'avg_ae_power',
+    'AE_RUN_HOURS': 'total_ae_running_hours',
+})
+
+VALIDATION_THRESHOLDS.update({
+    'ae_consumption': {
+        'min': 0,
+        'max': 50,
+        'power_factor': 300,
+        'historical_lower': 0.9,
+        'historical_upper': 1.1
+    }
+})
+
