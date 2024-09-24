@@ -67,8 +67,5 @@ st.sidebar.write("- ME Consumption")
 st.sidebar.write("- AE Consumption")
 st.sidebar.write("- Boiler Consumption")
 
-# You can add more Streamlit components here to enhance the user interface
-# For example, you could add options to filter results, display statistics, etc.
-
 st.write("This application validates vessel performance data based on multiple criteria.")
 st.write("Click the 'Validate Data' button to start the validation process.")
