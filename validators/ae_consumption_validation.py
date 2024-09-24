@@ -39,7 +39,7 @@ def is_value_within_percentage(value, reference, lower_percentage, upper_percent
     return lower_bound <= value <= upper_bound
 
 def calculate_power_based_consumption(power, run_hours, factor):
-    return (factor / power) * run_hours / 10**6 if pd.notna(power) and pd.notna(run_hours) and power > 0 else None
+    return (factor * power) * run_hours / 10**6 if pd.notna(power) and pd.notna(run_hours) and power > 0 else None
 
 # Main validation function
 def validate_ae_consumption(row, vessel_data):
