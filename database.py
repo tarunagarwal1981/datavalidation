@@ -2,7 +2,7 @@ from sqlalchemy import create_engine
 import pandas as pd
 from datetime import datetime, timedelta
 import urllib.parse
-from config import DB_CONFIG
+from app.config import DB_CONFIG, COLUMN_NAMES
 
 def get_db_engine():
     encoded_password = urllib.parse.quote(DB_CONFIG['password'])
@@ -29,8 +29,8 @@ def fetch_vessel_coefficients(engine):
     return pd.read_sql_query(query, engine)
 
 def fetch_hull_performance_data(engine):
-    query = """
-    SELECT vessel_name, hull_rough_power_loss_pct_ed
+    query = f"""
+    SELECT vessel_name, {COLUMN_NAMES['HULL_PERFORMANCE']}
     FROM hull_performance_six_months;
     """
     return pd.read_sql_query(query, engine)
