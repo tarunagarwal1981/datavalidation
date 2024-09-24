@@ -1,5 +1,12 @@
 import pandas as pd
-from app.config import VALIDATION_THRESHOLDS, COLUMN_NAMES
+from config import VALIDATION_THRESHOLDS, COLUMN_NAMES
+from utils.validation_utils import (
+    is_value_in_range, 
+    calculate_power_based_consumption, 
+    is_value_within_percentage,
+    add_failure_reason,
+    validate_non_negative
+)
 
 def validate_ae_consumption(row, historical_data):
     failure_reasons = []
@@ -8,26 +15,35 @@ def validate_ae_consumption(row, historical_data):
     ae_run_hours = row[COLUMN_NAMES['AE_RUN_HOURS']]
 
     if pd.notna(ae_consumption):
-        if ae_consumption < VALIDATION_THRESHOLDS['ae_consumption']['min'] or ae_consumption > VALIDATION_THRESHOLDS['ae_consumption']['max']:
-            failure_reasons.append("AE Consumption out of range")
+        # Check range
+        if not is_value_in_range(ae_consumption, VALIDATION_THRESHOLDS['ae_consumption']['min'], VALIDATION_THRESHOLDS['ae_consumption']['max']):
+            add_failure_reason(failure_reasons, "AE Consumption out of range")
 
-        if pd.notna(avg_ae_power) and pd.notna(ae_run_hours) and avg_ae_power > 0:
-            max_allowed_consumption = (VALIDATION_THRESHOLDS['ae_consumption']['power_factor'] / avg_ae_power) * ae_run_hours / 10**6
-            if ae_consumption > max_allowed_consumption:
-                failure_reasons.append("AE Consumption too high for the Reported power")
+        # Check against power-based calculation
+        max_allowed_consumption = calculate_power_based_consumption(avg_ae_power, ae_run_hours, VALIDATION_THRESHOLDS['ae_consumption']['power_factor'])
+        if max_allowed_consumption and ae_consumption > max_allowed_consumption:
+            add_failure_reason(failure_reasons, "AE Consumption too high for the Reported power")
 
+        # Check if zero when generating power
         if pd.notna(avg_ae_power) and avg_ae_power > 0 and ae_consumption == 0:
-            failure_reasons.append("AE Consumption cannot be zero when generating power")
+            add_failure_reason(failure_reasons, "AE Consumption cannot be zero when generating power")
 
-        if historical_data is not None and 'avg_ae_consumption' in historical_data:
-            avg_consumption = historical_data['avg_ae_consumption']
-            if pd.notna(avg_consumption):
-                if not (VALIDATION_THRESHOLDS['ae_consumption']['historical_lower'] * avg_consumption <= ae_consumption <= VALIDATION_THRESHOLDS['ae_consumption']['historical_upper'] * avg_consumption):
-                    failure_reasons.append("AE Consumption outside typical range")
+        # Historical comparison
+        if historical_data and 'avg_ae_consumption' in historical_data:
+            if not is_value_within_percentage(ae_consumption, historical_data['avg_ae_consumption'], 
+                                              VALIDATION_THRESHOLDS['ae_consumption']['historical_lower'], 
+                                              VALIDATION_THRESHOLDS['ae_consumption']['historical_upper']):
+                add_failure_reason(failure_reasons, "AE Consumption outside typical range")
 
+        # Check if total AE Consumption is zero (assuming no shaft generator)
         if ae_consumption == 0:
-            failure_reasons.append("Total AE Consumption cannot be zero without Shaft Generator")
+            add_failure_reason(failure_reasons, "Total AE Consumption cannot be zero without Shaft Generator")
     else:
-        failure_reasons.append("AE Consumption data is missing")
+        add_failure_reason(failure_reasons, "AE Consumption data is missing")
+
+    # Check for negative values
+    negative_check = validate_non_negative(ae_consumption, "AE Consumption")
+    if negative_check:
+        add_failure_reason(failure_reasons, negative_check)
 
     return failure_reasons
