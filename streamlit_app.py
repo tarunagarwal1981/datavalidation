@@ -29,8 +29,8 @@ if st.button('Validate Data'):
                 hull_performance = hull_performance_df[hull_performance_df['vessel_name'] == vessel_name]['hull_rough_power_loss_pct_ed'].iloc[0] if not hull_performance_df[hull_performance_df['vessel_name'] == vessel_name].empty else 0
                 hull_performance_factor = 1 + (hull_performance / 100)
                 
-                # Use the correct column name "Vessel_Name" for mcr_df
                 mcr_value = mcr_df[mcr_df['Vessel_Name'] == vessel_name]['ME_1_MCR_kW'].iloc[0] if not mcr_df[mcr_df['Vessel_Name'] == vessel_name].empty else None
+                mcr_value = float(mcr_value) if pd.notna(mcr_value) else None
                 
                 for _, row in vessel_data.iterrows():
                     me_failure_reasons = validate_me_consumption(row, vessel_data, vessel_type, vessel_coefficients, hull_performance_factor)
@@ -60,3 +60,15 @@ if st.button('Validate Data'):
     
     except Exception as e:
         st.error(f"An error occurred: {str(e)}")
+
+# Optional: Add more Streamlit components for user interaction or data visualization
+st.sidebar.write("Validation Criteria:")
+st.sidebar.write("- ME Consumption")
+st.sidebar.write("- AE Consumption")
+st.sidebar.write("- Boiler Consumption")
+
+# You can add more Streamlit components here to enhance the user interface
+# For example, you could add options to filter results, display statistics, etc.
+
+st.write("This application validates vessel performance data based on multiple criteria.")
+st.write("Click the 'Validate Data' button to start the validation process.")
