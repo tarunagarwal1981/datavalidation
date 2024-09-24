@@ -31,13 +31,23 @@ def fetch_vessel_performance_data(engine):
 
 def fetch_sf_consumption_logs(engine):
     query = """
-    SELECT VESSEL_NAME, REPORT_DATE, LATITUDE, LONGITUDE
+    SELECT *
     FROM sf_consumption_logs
-    WHERE REPORT_DATE >= %s
-    ORDER BY VESSEL_NAME, REPORT_DATE;
+    WHERE "REPORT_DATE" >= %s
+    ORDER BY "REPORT_DATE";
     """
     three_months_ago = datetime.now() - timedelta(days=90)
     df = pd.read_sql_query(query, engine, params=(three_months_ago,))
+    
+    # Rename columns to match expected names
+    column_mapping = {
+        'VESSEL_NAME': 'vessel_name',
+        'REPORT_DATE': 'reportdate',
+        'LATITUDE': 'latitude',
+        'LONGITUDE': 'longitude'
+    }
+    df = df.rename(columns={col: column_mapping.get(col, col) for col in df.columns})
+    
     return df
 
 def fetch_vessel_coefficients(engine):
@@ -63,19 +73,13 @@ def fetch_mcr_data(engine):
     return pd.read_sql_query(query, engine)
 
 def merge_vessel_and_consumption_data(vessel_df, consumption_df):
-    # Rename columns in consumption_df to match vessel_df
-    consumption_df = consumption_df.rename(columns={
-        'VESSEL_NAME': 'vessel_name',
-        'REPORT_DATE': 'reportdate'
-    })
-    
     # Merge the dataframes
     merged_df = pd.merge(vessel_df, consumption_df, 
                          on=['vessel_name', 'reportdate'], 
                          how='left')
     
     # Add previous latitude and longitude
-    merged_df['prev_LATITUDE'] = merged_df.groupby('vessel_name')['LATITUDE'].shift(1)
-    merged_df['prev_LONGITUDE'] = merged_df.groupby('vessel_name')['LONGITUDE'].shift(1)
+    merged_df['prev_latitude'] = merged_df.groupby('vessel_name')['latitude'].shift(1)
+    merged_df['prev_longitude'] = merged_df.groupby('vessel_name')['longitude'].shift(1)
     
     return merged_df
