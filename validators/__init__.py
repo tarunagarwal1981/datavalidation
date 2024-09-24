@@ -1,12 +1,12 @@
 from .me_consumption_validation import validate_me_consumption
 from .ae_consumption_validation import validate_ae_consumption
 from config import COLUMN_NAMES
-
-# Import other validation functions as you create them
+from utils.validation_utils import calculate_historical_average
 
 def run_all_validations(df, coefficients_df, hull_performance_df):
     validation_results = []
-    historical_ae_data = calculate_historical_ae_data(df)
+    historical_me_data = calculate_historical_average(df, COLUMN_NAMES['ME_CONSUMPTION'])
+    historical_ae_data = calculate_historical_average(df, COLUMN_NAMES['AE_CONSUMPTION'])
     
     for vessel_name, vessel_data in df.groupby(COLUMN_NAMES['VESSEL_NAME']):
         vessel_type = vessel_data[COLUMN_NAMES['VESSEL_TYPE']].iloc[0]
@@ -19,11 +19,12 @@ def run_all_validations(df, coefficients_df, hull_performance_df):
             failure_reasons = []
             
             # ME consumption validation
-            failure_reasons.extend(validate_me_consumption(row, vessel_type))
+            me_historical_data = {'avg_me_consumption': historical_me_data.get(vessel_name)}
+            failure_reasons.extend(validate_me_consumption(row, vessel_type, me_historical_data))
             
             # AE consumption validation
-            historical_data = {'avg_ae_consumption': historical_ae_data.get(vessel_name)} if vessel_name in historical_ae_data else None
-            failure_reasons.extend(validate_ae_consumption(row, historical_data))
+            ae_historical_data = {'avg_ae_consumption': historical_ae_data.get(vessel_name)}
+            failure_reasons.extend(validate_ae_consumption(row, ae_historical_data))
             
             # Add more validations here as you create them...
 
@@ -35,8 +36,3 @@ def run_all_validations(df, coefficients_df, hull_performance_df):
                 })
     
     return validation_results
-
-def calculate_historical_ae_data(df):
-    return df.groupby(COLUMN_NAMES['VESSEL_NAME']).apply(
-        lambda x: x.sort_values(COLUMN_NAMES['REPORT_DATE']).tail(30)[COLUMN_NAMES['AE_CONSUMPTION']].mean()
-    ).to_dict()
