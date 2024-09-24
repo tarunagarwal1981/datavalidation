@@ -46,5 +46,3 @@ COLUMN_NAMES = {
     'AVG_AE_POWER': 'avg_ae_power',
     'AE_RUN_HOURS': 'total_ae_running_hours'
 }
-
-# Add any other configuration parameters here
