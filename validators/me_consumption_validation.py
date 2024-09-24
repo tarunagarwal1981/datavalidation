@@ -1,6 +1,6 @@
 import pandas as pd
-from app.config import VALIDATION_THRESHOLDS, COLUMN_NAMES
-from app.utils.validation_utils import (
+from config import VALIDATION_THRESHOLDS, COLUMN_NAMES
+from utils.validation_utils import (
     is_value_in_range, 
     calculate_power_based_consumption, 
     is_value_within_percentage,
