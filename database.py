@@ -31,10 +31,10 @@ def fetch_vessel_performance_data(engine):
 
 def fetch_sf_consumption_logs(engine):
     query = """
-    SELECT *
+    SELECT VESSEL_NAME, REPORT_DATE, LATITUDE, LONGITUDE
     FROM sf_consumption_logs
-    WHERE reportdate >= %s
-    ORDER BY reportdate;
+    WHERE REPORT_DATE >= %s
+    ORDER BY VESSEL_NAME, REPORT_DATE;
     """
     three_months_ago = datetime.now() - timedelta(days=90)
     df = pd.read_sql_query(query, engine, params=(three_months_ago,))
@@ -63,22 +63,19 @@ def fetch_mcr_data(engine):
     return pd.read_sql_query(query, engine)
 
 def merge_vessel_and_consumption_data(vessel_df, consumption_df):
-    # Print column names for debugging
-    print("Vessel DataFrame columns:", vessel_df.columns)
-    print("Consumption DataFrame columns:", consumption_df.columns)
+    # Rename columns in consumption_df to match vessel_df
+    consumption_df = consumption_df.rename(columns={
+        'VESSEL_NAME': 'vessel_name',
+        'REPORT_DATE': 'reportdate'
+    })
     
-    # Assuming there's a common column to join on, like 'vessel_name' and 'reportdate'
-    # Adjust the column names as necessary
+    # Merge the dataframes
     merged_df = pd.merge(vessel_df, consumption_df, 
                          on=['vessel_name', 'reportdate'], 
                          how='left')
     
-    # Check if LATITUDE and LONGITUDE columns exist
-    if 'LATITUDE' in merged_df.columns and 'LONGITUDE' in merged_df.columns:
-        # Add previous latitude and longitude
-        merged_df['prev_LATITUDE'] = merged_df.groupby('vessel_name')['LATITUDE'].shift(1)
-        merged_df['prev_LONGITUDE'] = merged_df.groupby('vessel_name')['LONGITUDE'].shift(1)
-    else:
-        print("Warning: LATITUDE and/or LONGITUDE columns not found in merged dataframe")
+    # Add previous latitude and longitude
+    merged_df['prev_LATITUDE'] = merged_df.groupby('vessel_name')['LATITUDE'].shift(1)
+    merged_df['prev_LONGITUDE'] = merged_df.groupby('vessel_name')['LONGITUDE'].shift(1)
     
     return merged_df
