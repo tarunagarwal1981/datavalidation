@@ -4,6 +4,7 @@ from database import get_db_engine, fetch_vessel_performance_data, fetch_vessel_
 from validators.me_consumption_validation import validate_me_consumption
 from validators.ae_consumption_validation import validate_ae_consumption
 from validators.boiler_consumption_validation import validate_boiler_consumption
+from validators.distance_validation import validate_distance
 
 st.title('Vessel Data Validation')
 
@@ -36,8 +37,9 @@ if st.button('Validate Data'):
                     me_failure_reasons = validate_me_consumption(row, vessel_data, vessel_type, vessel_coefficients, hull_performance_factor)
                     ae_failure_reasons = validate_ae_consumption(row, vessel_data)
                     boiler_failure_reasons = validate_boiler_consumption(row, mcr_value)
+                    distance_failure_reasons = validate_distance(row, vessel_type)
                     
-                    failure_reasons = me_failure_reasons + ae_failure_reasons + boiler_failure_reasons
+                    failure_reasons = me_failure_reasons + ae_failure_reasons + boiler_failure_reasons + distance_failure_reasons
                     
                     if failure_reasons:
                         validation_results.append({
@@ -66,6 +68,7 @@ st.sidebar.write("Validation Criteria:")
 st.sidebar.write("- ME Consumption")
 st.sidebar.write("- AE Consumption")
 st.sidebar.write("- Boiler Consumption")
+st.sidebar.write("- Observed Distance")
 
 st.write("This application validates vessel performance data based on multiple criteria.")
 st.write("Click the 'Validate Data' button to start the validation process.")
