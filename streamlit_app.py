@@ -3,6 +3,7 @@ import pandas as pd
 from validators.me_consumption_validation import validate_me_consumption, fetch_vessel_performance_data, fetch_vessel_coefficients, fetch_hull_performance_data
 from validators.ae_consumption_validation import validate_ae_consumption
 from validators.boiler_consumption_validation import validate_boiler_consumption, fetch_mcr_data
+from validators.distance_validation import validate_distance_data
 
 st.title('Vessel Data Validation')
 
@@ -43,6 +44,10 @@ if st.button('Validate Data'):
                             'Remarks': ", ".join(failure_reasons)
                         })
             
+            # Add distance validation results
+            distance_validation_results = validate_distance_data()
+            validation_results.extend(distance_validation_results.to_dict('records'))
+            
             if validation_results:
                 result_df = pd.DataFrame(validation_results)
                 st.write("Validation Results:")
@@ -63,6 +68,7 @@ st.sidebar.write("Validation Criteria:")
 st.sidebar.write("- ME Consumption")
 st.sidebar.write("- AE Consumption")
 st.sidebar.write("- Boiler Consumption")
+st.sidebar.write("- Observed Distance")
 
 st.write("This application validates vessel performance data based on multiple criteria.")
 st.write("Click the 'Validate Data' button to start the validation process.")
