@@ -63,14 +63,22 @@ def fetch_mcr_data(engine):
     return pd.read_sql_query(query, engine)
 
 def merge_vessel_and_consumption_data(vessel_df, consumption_df):
+    # Print column names for debugging
+    print("Vessel DataFrame columns:", vessel_df.columns)
+    print("Consumption DataFrame columns:", consumption_df.columns)
+    
     # Assuming there's a common column to join on, like 'vessel_name' and 'reportdate'
     # Adjust the column names as necessary
     merged_df = pd.merge(vessel_df, consumption_df, 
-                         on=['VESSEL_NAME', 'REPORT_DATE'], 
+                         on=['vessel_name', 'reportdate'], 
                          how='left')
     
-    # Add previous latitude and longitude
-    merged_df['prev_LATITUDE'] = merged_df.groupby('VESSEL_NAME')['LATITUDE'].shift(1)
-    merged_df['prev_LONGITUDE'] = merged_df.groupby('VESSEL_NAME')['LONGITUDE'].shift(1)
+    # Check if LATITUDE and LONGITUDE columns exist
+    if 'LATITUDE' in merged_df.columns and 'LONGITUDE' in merged_df.columns:
+        # Add previous latitude and longitude
+        merged_df['prev_LATITUDE'] = merged_df.groupby('vessel_name')['LATITUDE'].shift(1)
+        merged_df['prev_LONGITUDE'] = merged_df.groupby('vessel_name')['LONGITUDE'].shift(1)
+    else:
+        print("Warning: LATITUDE and/or LONGITUDE columns not found in merged dataframe")
     
     return merged_df
