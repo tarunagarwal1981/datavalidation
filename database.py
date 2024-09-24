@@ -61,7 +61,7 @@ def fetch_vessel_performance_data(engine):
             ROW_NUMBER() OVER (PARTITION BY vps.vessel_name ORDER BY vps.reportdate) as row_num
         FROM vessel_performance_summary vps
         LEFT JOIN vessel_particulars vp ON vps.vessel_name = vp.vessel_name
-        LEFT JOIN sf_consumption_logs sl ON vps.vessel_name = sl.vessel_name AND vps.reportdate = sl.reportdate
+        LEFT JOIN sf_consumption_logs sl ON vps.vessel_name = sl.VESSEL_NAME AND vps.reportdate = sl.reportdate
         WHERE vps.reportdate >= %s
     )
     SELECT 
