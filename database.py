@@ -66,11 +66,11 @@ def merge_vessel_and_consumption_data(vessel_df, consumption_df):
     # Assuming there's a common column to join on, like 'vessel_name' and 'reportdate'
     # Adjust the column names as necessary
     merged_df = pd.merge(vessel_df, consumption_df, 
-                         on=['vessel_name', 'reportdate'], 
+                         on=['VESSEL_NAME', 'REPORT_DATE'], 
                          how='left')
     
     # Add previous latitude and longitude
-    merged_df['prev_LATITUDE'] = merged_df.groupby('vessel_name')['LATITUDE'].shift(1)
-    merged_df['prev_LONGITUDE'] = merged_df.groupby('vessel_name')['LONGITUDE'].shift(1)
+    merged_df['prev_LATITUDE'] = merged_df.groupby('VESSEL_NAME')['LATITUDE'].shift(1)
+    merged_df['prev_LONGITUDE'] = merged_df.groupby('VESSEL_NAME')['LONGITUDE'].shift(1)
     
     return merged_df
