@@ -80,3 +80,73 @@ def run_all_validations(df, coefficients_df, hull_performance_df):
                 })
     
     return validation_results
+
+def validate_ae_consumption(row, historical_data):
+    failure_reasons = []
+    ae_consumption = row[COLUMN_NAMES['AE_CONSUMPTION']]
+    avg_ae_power = row[COLUMN_NAMES['AVG_AE_POWER']]
+    ae_run_hours = row[COLUMN_NAMES['AE_RUN_HOURS']]
+
+    # Check if AE Consumption is out of range
+    if ae_consumption < VALIDATION_THRESHOLDS['ae_consumption']['min'] or ae_consumption > VALIDATION_THRESHOLDS['ae_consumption']['max']:
+        failure_reasons.append("AE Consumption out of range")
+
+    # Check if AE Consumption is too high for the reported power
+    if avg_ae_power > 0:  # Ensure we don't divide by zero
+        max_allowed_consumption = (VALIDATION_THRESHOLDS['ae_consumption']['power_factor'] / avg_ae_power) * ae_run_hours / 10**6
+        if ae_consumption > max_allowed_consumption:
+            failure_reasons.append("AE Consumption too high for the Reported power")
+
+    # Check if AE Consumption is zero when generating power
+    if avg_ae_power > 0 and ae_consumption == 0:
+        failure_reasons.append("AE Consumption cannot be zero when generating power")
+
+    # Historical comparison
+    if historical_data is not None:
+        avg_consumption = historical_data['avg_ae_consumption']
+        if not (VALIDATION_THRESHOLDS['ae_consumption']['historical_lower'] * avg_consumption <= ae_consumption <= VALIDATION_THRESHOLDS['ae_consumption']['historical_upper'] * avg_consumption):
+            failure_reasons.append("AE Consumption outside typical range")
+
+    # Check if total AE Consumption is zero (assuming no shaft generator)
+    if ae_consumption == 0:
+        failure_reasons.append("Total AE Consumption cannot be zero without Shaft Generator")
+
+    return failure_reasons
+
+def calculate_historical_ae_data(df):
+    # Group by vessel and calculate average AE consumption for the last 30 days
+    return df.groupby(COLUMN_NAMES['VESSEL_NAME']).apply(
+        lambda x: x.sort_values(COLUMN_NAMES['REPORT_DATE']).tail(30)[COLUMN_NAMES['AE_CONSUMPTION']].mean()
+    ).to_dict()
+
+def run_all_validations(df, coefficients_df, hull_performance_df):
+    validation_results = []
+    historical_ae_data = calculate_historical_ae_data(df)
+    
+    for vessel_name, vessel_data in df.groupby(COLUMN_NAMES['VESSEL_NAME']):
+        vessel_type = vessel_data[COLUMN_NAMES['VESSEL_TYPE']].iloc[0]
+        vessel_coefficients = coefficients_df[coefficients_df[COLUMN_NAMES['VESSEL_NAME']] == vessel_name].iloc[0] if not coefficients_df[coefficients_df[COLUMN_NAMES['VESSEL_NAME']] == vessel_name].empty else None
+        
+        hull_performance = hull_performance_df[hull_performance_df[COLUMN_NAMES['VESSEL_NAME']] == vessel_name][COLUMN_NAMES['HULL_PERFORMANCE']].iloc[0] if not hull_performance_df[hull_performance_df[COLUMN_NAMES['VESSEL_NAME']] == vessel_name].empty else 0
+        hull_performance_factor = 1 + (hull_performance / 100)
+        
+        for _, row in vessel_data.iterrows():
+            failure_reasons = []
+            
+            # ME consumption validation
+            failure_reasons.extend(validate_me_consumption(row, vessel_type))
+            
+            # AE consumption validation
+            historical_data = {'avg_ae_consumption': historical_ae_data.get(vessel_name)} if vessel_name in historical_ae_data else None
+            failure_reasons.extend(validate_ae_consumption(row, historical_data))
+            
+            # Add more validations here as needed...
+
+            if failure_reasons:
+                validation_results.append({
+                    'Vessel Name': vessel_name,
+                    'Report Date': row[COLUMN_NAMES['REPORT_DATE']],
+                    'Remarks': ", ".join(failure_reasons)
+                })
+    
+    return validation_results
