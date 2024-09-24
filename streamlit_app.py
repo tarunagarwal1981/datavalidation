@@ -19,10 +19,6 @@ if st.button('Validate Data'):
         consumption_df = fetch_sf_consumption_logs(engine)
         df = merge_vessel_and_consumption_data(vessel_df, consumption_df)
         
-        # Print dataframe info for debugging
-        st.write("DataFrame Info:")
-        st.write(df.info())
-        
         coefficients_df = fetch_vessel_coefficients(engine)
         hull_performance_df = fetch_hull_performance_data(engine)
         mcr_df = fetch_mcr_data(engine)
@@ -44,12 +40,7 @@ if st.button('Validate Data'):
                     me_failure_reasons = validate_me_consumption(row, vessel_data, vessel_type, vessel_coefficients, hull_performance_factor)
                     ae_failure_reasons = validate_ae_consumption(row, vessel_data)
                     boiler_failure_reasons = validate_boiler_consumption(row, mcr_value)
-                    
-                    # Only perform distance validation if LATITUDE and LONGITUDE columns exist
-                    if 'LATITUDE' in df.columns and 'LONGITUDE' in df.columns:
-                        distance_failure_reasons = validate_distance(row, vessel_type)
-                    else:
-                        distance_failure_reasons = []
+                    distance_failure_reasons = validate_distance(row, vessel_type)
                     
                     failure_reasons = me_failure_reasons + ae_failure_reasons + boiler_failure_reasons + distance_failure_reasons
                     
@@ -80,7 +71,7 @@ st.sidebar.write("Validation Criteria:")
 st.sidebar.write("- ME Consumption")
 st.sidebar.write("- AE Consumption")
 st.sidebar.write("- Boiler Consumption")
-st.sidebar.write("- Observed Distance (if latitude/longitude data available)")
+st.sidebar.write("- Observed Distance")
 
 st.write("This application validates vessel performance data based on multiple criteria.")
 st.write("Click the 'Validate Data' button to start the validation process.")
