@@ -51,8 +51,8 @@ def calculate_expected_consumption(coefficients, speed, displacement, hull_perfo
 def is_value_within_percentage(value, reference, lower_percentage, upper_percentage):
     if pd.isna(value) or pd.isna(reference):
         return False
-    lower_bound = reference * (1 - lower_percentage)
-    upper_bound = reference * (1 + upper_percentage)
+    lower_bound = reference * (lower_percentage)
+    upper_bound = reference * (upper_percentage)
     return lower_bound <= value <= upper_bound
 
 def calculate_power_based_consumption(power, run_hours, factor):
