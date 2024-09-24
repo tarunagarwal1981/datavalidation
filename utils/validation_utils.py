@@ -28,6 +28,15 @@ def add_failure_reason(failure_reasons, reason):
     if reason not in failure_reasons:
         failure_reasons.append(reason)
 
+def calculate_expected_consumption(coefficients, speed, displacement, hull_performance_factor):
+    """Calculate the expected consumption based on vessel coefficients and current conditions."""
+    base_consumption = (coefficients['consp_speed1'] * speed +
+                        coefficients['consp_disp1'] * displacement +
+                        coefficients['consp_speed2'] * speed**2 +
+                        coefficients['consp_disp2'] * displacement**2 +
+                        coefficients['consp_intercept'])
+    return base_consumption * hull_performance_factor
+
 def validate_non_negative(value, field_name):
     """Validate that a value is non-negative."""
     if pd.notna(value) and value < 0:
