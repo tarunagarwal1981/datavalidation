@@ -22,6 +22,7 @@ if st.button('Validate Data'):
         # Print dataframe info for debugging
         st.write("DataFrame Info:")
         st.write(df.info())
+        st.write("DataFrame Columns:", df.columns.tolist())
         
         coefficients_df = fetch_vessel_coefficients(engine)
         hull_performance_df = fetch_hull_performance_data(engine)
