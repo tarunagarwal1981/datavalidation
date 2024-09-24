@@ -1,4 +1,5 @@
 import pandas as pd
+from database import get_db_engine
 
 # Configuration
 COLUMN_NAMES = {
@@ -15,6 +16,16 @@ VALIDATION_THRESHOLDS = {
 }
 
 EVENT_AT_SEA = 'NOON AT SEA'
+
+# Data fetching function
+def fetch_mcr_data():
+    engine = get_db_engine()
+    query = """
+    SELECT "Vessel_Name", 
+           CAST(NULLIF("ME_1_MCR_kW", '') AS FLOAT) AS "ME_1_MCR_kW"
+    FROM machinery_particulars;
+    """
+    return pd.read_sql_query(query, engine)
 
 # Utility functions
 def calculate_me_load(me_power, mcr):
@@ -41,7 +52,7 @@ def validate_boiler_consumption(row, mcr_value):
             failure_reasons.append("Boiler Consumption out of range")
 
         # For now, we're considering Cargo Heating as 0
-        cargo_heating = 0
+        cargo_heating = 30
         if boiler_consumption < cargo_heating:
             failure_reasons.append("Boiler Consumption cannot be less than Cargo Heating Consumption")
 
