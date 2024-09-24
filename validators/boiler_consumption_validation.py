@@ -19,7 +19,10 @@ EVENT_AT_SEA = 'NOON AT SEA'
 # Utility functions
 def calculate_me_load(me_power, mcr):
     if pd.notna(me_power) and pd.notna(mcr) and mcr != 0:
-        return (me_power * 100) / mcr
+        try:
+            return (float(me_power) * 100) / float(mcr)
+        except ValueError:
+            return None
     return None
 
 def is_value_in_range(value, min_val, max_val):
