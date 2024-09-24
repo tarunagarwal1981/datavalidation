@@ -41,3 +41,10 @@ def fetch_hull_performance_data(engine):
     FROM hull_performance_six_months;
     """
     return pd.read_sql_query(query, engine)
+
+def fetch_mcr_data(engine):
+    query = """
+    SELECT Vessel_Name, ME_1_MCR_kW
+    FROM machinery_particulars;
+    """
+    return pd.read_sql_query(query, engine)
