@@ -2,7 +2,14 @@ from sqlalchemy import create_engine
 import pandas as pd
 from datetime import datetime, timedelta
 import urllib.parse
-from config import DB_CONFIG, COLUMN_NAMES
+
+DB_CONFIG = {
+    'host': 'aws-0-ap-south-1.pooler.supabase.com',
+    'database': 'postgres',
+    'user': 'postgres.conrxbcvuogbzfysomov',
+    'password': 'wXAryCC8@iwNvj#',
+    'port': '6543'
+}
 
 def get_db_engine():
     encoded_password = urllib.parse.quote(DB_CONFIG['password'])
@@ -17,7 +24,7 @@ def fetch_vessel_performance_data(engine):
     LEFT JOIN vessel_particulars vp ON vps.vessel_name = vp.vessel_name
     WHERE vps.reportdate >= %s;
     """
-    three_months_ago = datetime.now() - timedelta(days=60)
+    three_months_ago = datetime.now() - timedelta(days=90)
     df = pd.read_sql_query(query, engine, params=(three_months_ago,))
     return df
 
@@ -29,8 +36,8 @@ def fetch_vessel_coefficients(engine):
     return pd.read_sql_query(query, engine)
 
 def fetch_hull_performance_data(engine):
-    query = f"""
-    SELECT vessel_name, {COLUMN_NAMES['HULL_PERFORMANCE']}
+    query = """
+    SELECT vessel_name, hull_rough_power_loss_pct_ed
     FROM hull_performance_six_months;
     """
     return pd.read_sql_query(query, engine)
