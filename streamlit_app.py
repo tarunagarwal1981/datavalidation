@@ -1,10 +1,9 @@
 import streamlit as st
 import pandas as pd
-from database import get_db_engine, fetch_vessel_performance_data, fetch_sf_consumption_logs, merge_vessel_and_consumption_data, fetch_vessel_coefficients, fetch_hull_performance_data, fetch_mcr_data
+from database import get_db_engine, fetch_vessel_performance_data, fetch_vessel_coefficients, fetch_hull_performance_data, fetch_mcr_data
 from validators.me_consumption_validation import validate_me_consumption
 from validators.ae_consumption_validation import validate_ae_consumption
 from validators.boiler_consumption_validation import validate_boiler_consumption
-from validators.distance_validation import validate_distance
 
 st.title('Vessel Data Validation')
 
@@ -15,15 +14,7 @@ if st.button('Validate Data'):
     engine = get_db_engine()
 
     try:
-        vessel_df = fetch_vessel_performance_data(engine)
-        consumption_df = fetch_sf_consumption_logs(engine)
-        df = merge_vessel_and_consumption_data(vessel_df, consumption_df)
-        
-        # Print dataframe info for debugging
-        st.write("DataFrame Info:")
-        st.write(df.info())
-        st.write("DataFrame Columns:", df.columns.tolist())
-        
+        df = fetch_vessel_performance_data(engine)
         coefficients_df = fetch_vessel_coefficients(engine)
         hull_performance_df = fetch_hull_performance_data(engine)
         mcr_df = fetch_mcr_data(engine)
@@ -46,14 +37,7 @@ if st.button('Validate Data'):
                     ae_failure_reasons = validate_ae_consumption(row, vessel_data)
                     boiler_failure_reasons = validate_boiler_consumption(row, mcr_value)
                     
-                    # Only perform distance validation if latitude and longitude columns exist
-                    if 'LATITUDE' in df.columns and 'LONGITUDE' in df.columns:
-                        distance_failure_reasons = validate_distance(row, vessel_type)
-                    else:
-                        distance_failure_reasons = []
-                        st.warning("Latitude and/or longitude data not available. Distance validation skipped.")
-                    
-                    failure_reasons = me_failure_reasons + ae_failure_reasons + boiler_failure_reasons + distance_failure_reasons
+                    failure_reasons = me_failure_reasons + ae_failure_reasons + boiler_failure_reasons
                     
                     if failure_reasons:
                         validation_results.append({
@@ -76,14 +60,12 @@ if st.button('Validate Data'):
     
     except Exception as e:
         st.error(f"An error occurred: {str(e)}")
-        st.error(f"Error details: {type(e).__name__}, {str(e)}")
 
 # Optional: Add more Streamlit components for user interaction or data visualization
 st.sidebar.write("Validation Criteria:")
 st.sidebar.write("- ME Consumption")
 st.sidebar.write("- AE Consumption")
 st.sidebar.write("- Boiler Consumption")
-st.sidebar.write("- Observed Distance (if latitude/longitude data available)")
 
 st.write("This application validates vessel performance data based on multiple criteria.")
 st.write("Click the 'Validate Data' button to start the validation process.")
