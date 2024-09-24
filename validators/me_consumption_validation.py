@@ -1,4 +1,6 @@
 import pandas as pd
+from database import get_db_engine
+from datetime import datetime, timedelta
 
 # Configuration
 COLUMN_NAMES = {
@@ -25,6 +27,35 @@ VALIDATION_THRESHOLDS = {
     'expected_lower': 0.8,
     'expected_upper': 1.2
 }
+
+# Data fetching functions
+def fetch_vessel_performance_data():
+    engine = get_db_engine()
+    query = """
+    SELECT vps.*, vp.vessel_type
+    FROM vessel_performance_summary vps
+    LEFT JOIN vessel_particulars vp ON vps.vessel_name = vp.vessel_name
+    WHERE vps.reportdate >= %s;
+    """
+    three_months_ago = datetime.now() - timedelta(days=90)
+    df = pd.read_sql_query(query, engine, params=(three_months_ago,))
+    return df
+
+def fetch_vessel_coefficients():
+    engine = get_db_engine()
+    query = """
+    SELECT *
+    FROM vessel_performance_coefficients;
+    """
+    return pd.read_sql_query(query, engine)
+
+def fetch_hull_performance_data():
+    engine = get_db_engine()
+    query = """
+    SELECT vessel_name, hull_rough_power_loss_pct_ed
+    FROM hull_performance_six_months;
+    """
+    return pd.read_sql_query(query, engine)
 
 # Utility functions
 def is_value_in_range(value, min_val, max_val):
