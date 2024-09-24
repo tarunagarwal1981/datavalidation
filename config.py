@@ -17,6 +17,13 @@ VALIDATION_THRESHOLDS = {
         'historical_upper': 1.2,
         'expected_lower': 0.8,
         'expected_upper': 1.2
+    },
+    'ae_consumption': {
+        'min': 0,
+        'max': 50,
+        'power_factor': 300,
+        'historical_lower': 0.9,
+        'historical_upper': 1.1
     }
 }
 
@@ -34,23 +41,10 @@ COLUMN_NAMES = {
     'VESSEL_NAME': 'vessel_name',
     'VESSEL_TYPE': 'vessel_type',
     'DISPLACEMENT': 'displacement',
-    'HULL_PERFORMANCE': 'hull_rough_power_loss_pct_ed'
-}
-
-
-COLUMN_NAMES.update({
+    'HULL_PERFORMANCE': 'hull_rough_power_loss_pct_ed',
     'AE_CONSUMPTION': 'aux_engine_consumption',
     'AVG_AE_POWER': 'avg_ae_power',
-    'AE_RUN_HOURS': 'total_ae_running_hours',
-})
+    'AE_RUN_HOURS': 'total_ae_running_hours'
+}
 
-VALIDATION_THRESHOLDS.update({
-    'ae_consumption': {
-        'min': 0,
-        'max': 50,
-        'power_factor': 300,
-        'historical_lower': 0.9,
-        'historical_upper': 1.1
-    }
-})
-
+# Add any other configuration parameters here
