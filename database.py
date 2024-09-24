@@ -17,7 +17,7 @@ def fetch_vessel_performance_data(engine):
     LEFT JOIN vessel_particulars vp ON vps.vessel_name = vp.vessel_name
     WHERE vps.reportdate >= %s;
     """
-    three_months_ago = datetime.now() - timedelta(days=90)
+    three_months_ago = datetime.now() - timedelta(days=60)
     df = pd.read_sql_query(query, engine, params=(three_months_ago,))
     return df
 
