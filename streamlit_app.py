@@ -46,7 +46,7 @@ if st.button('Validate Data'):
                     boiler_failure_reasons = validate_boiler_consumption(row, mcr_value)
                     
                     # Only perform distance validation if latitude and longitude columns exist
-                    if 'latitude' in df.columns and 'longitude' in df.columns:
+                    if 'LATITUDE' in df.columns and 'LONGITUDE' in df.columns:
                         distance_failure_reasons = validate_distance(row, vessel_type)
                     else:
                         distance_failure_reasons = []
@@ -75,6 +75,7 @@ if st.button('Validate Data'):
     
     except Exception as e:
         st.error(f"An error occurred: {str(e)}")
+        st.error(f"Error details: {type(e).__name__}, {str(e)}")
 
 # Optional: Add more Streamlit components for user interaction or data visualization
 st.sidebar.write("Validation Criteria:")
