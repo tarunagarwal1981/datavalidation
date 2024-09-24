@@ -92,11 +92,12 @@ def validate_me_consumption(row, vessel_data, vessel_type, vessel_coefficients, 
         # Historical comparison
         historical_data = calculate_historical_average(vessel_data)
         if historical_data:
-            avg_consumption = historical_data
-            if not is_value_within_percentage(me_consumption, avg_consumption, 
-                                              VALIDATION_THRESHOLDS['historical_lower'], 
-                                              VALIDATION_THRESHOLDS['historical_upper']):
-                failure_reasons.append(f"ME Consumption outside typical range of {load_type} condition")
+            avg_consumption = historical_data.get(row['vessel_name'])
+            if avg_consumption is not None:
+                if not is_value_within_percentage(me_consumption, avg_consumption, 
+                                                  VALIDATION_THRESHOLDS['historical_lower'], 
+                                                  VALIDATION_THRESHOLDS['historical_upper']):
+                    failure_reasons.append(f"ME Consumption outside typical range of {load_type} condition")
 
         # Expected consumption validation with hull performance
         if vessel_coefficients is not None and streaming_hours > 0:
