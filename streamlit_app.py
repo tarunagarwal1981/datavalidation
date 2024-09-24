@@ -1,159 +1,13 @@
 import streamlit as st
 import pandas as pd
-from sqlalchemy import create_engine
-from datetime import datetime, timedelta
-import urllib.parse
+from database import get_db_engine, fetch_vessel_performance_data, fetch_vessel_coefficients, fetch_hull_performance_data
+from validators import run_all_validations
 
-# Define the column names based on your table structure
-ME_CONSUMPTION_COL = 'actual_me_consumption'
-ME_POWER_COL = 'actual_me_power'
-ME_RPM_COL = 'me_rpm'
-VESSEL_IMO_COL = 'vessel_imo'
-RUN_HOURS_COL = 'steaming_time_hrs'
-CURRENT_LOAD_COL = 'me_load_pct'
-CURRENT_SPEED_COL = 'observed_speed'
-STREAMING_HOURS_COL = 'steaming_time_hrs'
-REPORT_DATE_COL = 'reportdate'
-LOAD_TYPE_COL = 'load_type'
-VESSEL_NAME_COL = 'vessel_name'
-VESSEL_TYPE_COL = 'vessel_type'
-DISPLACEMENT_COL = 'displacement'
-HULL_PERFORMANCE_COL = 'hull_rough_power_loss_pct_ed'  # Corrected column name
+st.title('Vessel Data Validation')
 
 # Sidebar information
 st.sidebar.write("Data validation happened for the last 3 months.")
 
-# Supabase connection details
-supabase_host = "aws-0-ap-south-1.pooler.supabase.com"
-supabase_database = "postgres"
-supabase_user = "postgres.conrxbcvuogbzfysomov"
-supabase_password = "wXAryCC8@iwNvj#"
-supabase_port = "6543"
-
-# URL encode the password
-encoded_password = urllib.parse.quote(supabase_password)
-
-# Function to create the SQLAlchemy engine using Supabase credentials
-@st.cache_resource
-def get_db_engine():
-    db_url = f"postgresql+psycopg2://{supabase_user}:{encoded_password}@{supabase_host}:{supabase_port}/{supabase_database}"
-    engine = create_engine(db_url)
-    return engine
-
-# Fetch the data for the last 3 months from the vessel_performance_summary table and join with vessel_particulars
-def fetch_vessel_performance_data(engine):
-    query = """
-    SELECT vps.*, vp.vessel_type
-    FROM vessel_performance_summary vps
-    LEFT JOIN vessel_particulars vp ON vps.vessel_name = vp.vessel_name
-    WHERE vps.reportdate >= %s;
-    """
-    three_months_ago = datetime.now() - timedelta(days=90)
-    df = pd.read_sql_query(query, engine, params=(three_months_ago,))
-    return df
-
-# Function to fetch vessel performance coefficients
-def fetch_vessel_coefficients(engine):
-    query = """
-    SELECT *
-    FROM vessel_performance_coefficients;
-    """
-    return pd.read_sql_query(query, engine)
-
-# Function to fetch hull performance data
-def fetch_hull_performance_data(engine):
-    query = f"""
-    SELECT vessel_name, {HULL_PERFORMANCE_COL}
-    FROM hull_performance_six_months;
-    """
-    return pd.read_sql_query(query, engine)
-
-# Calculate average consumption for the last 30 non-null data points for each vessel and load type
-def calculate_avg_consumption(vessel_df, load_type):
-    relevant_data = vessel_df[vessel_df[LOAD_TYPE_COL] == load_type].dropna(subset=[ME_CONSUMPTION_COL])
-    relevant_data = relevant_data.sort_values(by=REPORT_DATE_COL).tail(30)
-
-    if len(relevant_data) >= 10:  # Only calculate if we have at least 10 data points
-        total_consumption = relevant_data[ME_CONSUMPTION_COL].sum()
-        total_steaming_time = relevant_data[RUN_HOURS_COL].sum()
-        if total_steaming_time > 0:
-            return total_consumption / total_steaming_time
-    return None
-
-# Function to calculate expected consumption
-def calculate_expected_consumption(coefficients, speed, displacement, hull_performance_factor):
-    base_consumption = (coefficients['consp_speed1'] * speed +
-                        coefficients['consp_disp1'] * displacement +
-                        coefficients['consp_speed2'] * speed**2 +
-                        coefficients['consp_disp2'] * displacement**2 +
-                        coefficients['consp_intercept'])
-    return base_consumption * hull_performance_factor
-
-# Run the validation logic for each vessel
-def validate_data(df, coefficients_df, hull_performance_df):
-    validation_results = []
-    
-    for vessel_name, vessel_data in df.groupby(VESSEL_NAME_COL):
-        vessel_type = vessel_data[VESSEL_TYPE_COL].iloc[0]  # Get vessel type for this vessel
-        vessel_coefficients = coefficients_df[coefficients_df[VESSEL_NAME_COL] == vessel_name].iloc[0] if not coefficients_df[coefficients_df[VESSEL_NAME_COL] == vessel_name].empty else None
-        
-        # Get hull performance factor
-        hull_performance = hull_performance_df[hull_performance_df[VESSEL_NAME_COL] == vessel_name][HULL_PERFORMANCE_COL].iloc[0] if not hull_performance_df[hull_performance_df[VESSEL_NAME_COL] == vessel_name].empty else 0
-        hull_performance_factor = 1 + (hull_performance / 100)
-        
-        for _, row in vessel_data.iterrows():
-            failure_reasons = []
-            
-            me_consumption = row[ME_CONSUMPTION_COL]
-            me_power = row[ME_POWER_COL]
-            me_rpm = row[ME_RPM_COL]
-            run_hours = row[RUN_HOURS_COL]
-            load_type = row[LOAD_TYPE_COL]
-            observed_speed = row[CURRENT_SPEED_COL]
-            displacement = row[DISPLACEMENT_COL]
-            streaming_hours = row[STREAMING_HOURS_COL]
-            
-            if me_consumption < 0 or me_consumption > 50:
-                failure_reasons.append("ME Consumption out of range")
-            
-            if me_consumption >= (250 * me_power * run_hours / 10**6):
-                failure_reasons.append("ME Consumption too high for the Reported power")
-            
-            if me_rpm > 0 and me_consumption == 0:
-                failure_reasons.append("ME Consumption cannot be zero when underway")
-            
-            if vessel_type == "CONTAINER" and me_consumption > 300:
-                failure_reasons.append("ME Consumption too high for container vessel")
-            elif vessel_type != "CONTAINER" and me_consumption > 50:
-                failure_reasons.append("ME Consumption too high for non-container vessel")
-
-            # Historical data comparison
-            avg_consumption = calculate_avg_consumption(vessel_data, load_type)
-            if avg_consumption is not None:
-                if not (0.8 * avg_consumption <= me_consumption <= 1.2 * avg_consumption):
-                    failure_reasons.append(f"ME Consumption outside typical range of {load_type} condition")
-
-            # Expected consumption validation with hull performance
-            if vessel_coefficients is not None and streaming_hours > 0:
-                expected_consumption = calculate_expected_consumption(
-                    vessel_coefficients, observed_speed, displacement, hull_performance_factor
-                )
-                if not (0.8 * expected_consumption <= me_consumption <= 1.2 * expected_consumption):
-                    failure_reasons.append("ME Consumption not aligned with speed consumption table (including hull performance)")
-
-            if failure_reasons:
-                validation_results.append({
-                    'Vessel Name': vessel_name,
-                    'Report Date': row[REPORT_DATE_COL],
-                    'Remarks': ", ".join(failure_reasons)
-                })
-    
-    return validation_results
-
-# Main section of the Streamlit app
-st.title('ME Consumption Validation')
-
-# Button to validate data
 if st.button('Validate Data'):
     engine = get_db_engine()
 
@@ -163,7 +17,7 @@ if st.button('Validate Data'):
         hull_performance_df = fetch_hull_performance_data(engine)
         
         if not df.empty:
-            validation_results = validate_data(df, coefficients_df, hull_performance_df)
+            validation_results = run_all_validations(df, coefficients_df, hull_performance_df)
             
             if validation_results:
                 result_df = pd.DataFrame(validation_results)
