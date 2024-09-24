@@ -1,5 +1,5 @@
 import pandas as pd
-from app.config import COLUMN_NAMES
+from config import COLUMN_NAMES
 
 def is_value_in_range(value, min_val, max_val):
     """Check if a value is within a specified range."""
@@ -15,8 +15,8 @@ def is_value_within_percentage(value, reference, lower_percentage, upper_percent
     """Check if a value is within a specified percentage range of a reference value."""
     if pd.isna(value) or pd.isna(reference):
         return False
-    lower_bound = reference * (1 - lower_percentage / 100)
-    upper_bound = reference * (1 + upper_percentage / 100)
+    lower_bound = reference * (1 - lower_percentage)
+    upper_bound = reference * (1 + upper_percentage)
     return lower_bound <= value <= upper_bound
 
 def calculate_power_based_consumption(power, run_hours, factor):
@@ -33,5 +33,3 @@ def validate_non_negative(value, field_name):
     if pd.notna(value) and value < 0:
         return f"{field_name} cannot be negative"
     return None
-
-# Add more utility functions as needed
