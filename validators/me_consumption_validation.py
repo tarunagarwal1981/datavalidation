@@ -94,7 +94,7 @@ def validate_me_consumption(row, vessel_data, vessel_type, vessel_coefficients, 
         # Check against vessel type limits
         max_limit = VALIDATION_THRESHOLDS['container_max'] if vessel_type == "CONTAINER" else VALIDATION_THRESHOLDS['non_container_max']
         if me_consumption > max_limit:
-            failure_reasons.append(f"ME Consumption too high for {vessel_type.lower()} vessel")
+            failure_reasons.append(f"ME Consumption too high for {vessel_type} vessel")
 
         # Historical comparison
         historical_data = calculate_historical_average(vessel_data)
