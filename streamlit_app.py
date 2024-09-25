@@ -20,68 +20,72 @@ observed_distance_check = st.sidebar.checkbox("Observed Distance", value=True)
 # Option to limit number of vessels
 max_vessels = st.sidebar.number_input("Maximum number of vessels to process (0 for all)", min_value=0, value=0)
 
+# Batch size for distance validation
+batch_size = st.sidebar.number_input("Batch size for distance validation", min_value=100, max_value=10000, value=1000, step=100)
+
 if st.button('Validate Data'):
     try:
-        # Fetch all necessary data
-        df = fetch_vessel_performance_data()
-        coefficients_df = fetch_vessel_coefficients()
-        hull_performance_df = fetch_hull_performance_data()
-        mcr_df = fetch_mcr_data()
-        
         validation_results = []
-        
-        if not df.empty:
-            vessel_groups = list(df.groupby('vessel_name'))
-            if max_vessels > 0:
-                vessel_groups = vessel_groups[:max_vessels]
+
+        # Perform non-distance validations
+        if me_consumption_check or ae_consumption_check or boiler_consumption_check:
+            df = fetch_vessel_performance_data()
+            coefficients_df = fetch_vessel_coefficients()
+            hull_performance_df = fetch_hull_performance_data()
+            mcr_df = fetch_mcr_data()
             
-            progress_bar = st.progress(0)
-            progress_text = st.empty()
-            
-            for i, (vessel_name, vessel_data) in enumerate(vessel_groups):
-                vessel_type = vessel_data['vessel_type'].iloc[0]
-                vessel_coefficients = coefficients_df[coefficients_df['vessel_name'] == vessel_name].iloc[0] if not coefficients_df[coefficients_df['vessel_name'] == vessel_name].empty else None
+            if not df.empty:
+                vessel_groups = list(df.groupby('vessel_name'))
+                if max_vessels > 0:
+                    vessel_groups = vessel_groups[:max_vessels]
                 
-                hull_performance = hull_performance_df[hull_performance_df['vessel_name'] == vessel_name]['hull_rough_power_loss_pct_ed'].iloc[0] if not hull_performance_df[hull_performance_df['vessel_name'] == vessel_name].empty else 0
-                hull_performance_factor = 1 + (hull_performance / 100)
+                progress_bar = st.progress(0)
+                progress_text = st.empty()
                 
-                mcr_value = mcr_df[mcr_df['Vessel_Name'] == vessel_name]['ME_1_MCR_kW'].iloc[0] if not mcr_df[mcr_df['Vessel_Name'] == vessel_name].empty else None
-                mcr_value = float(mcr_value) if pd.notna(mcr_value) else None
+                for i, (vessel_name, vessel_data) in enumerate(vessel_groups):
+                    vessel_type = vessel_data['vessel_type'].iloc[0]
+                    vessel_coefficients = coefficients_df[coefficients_df['vessel_name'] == vessel_name].iloc[0] if not coefficients_df[coefficients_df['vessel_name'] == vessel_name].empty else None
+                    
+                    hull_performance = hull_performance_df[hull_performance_df['vessel_name'] == vessel_name]['hull_rough_power_loss_pct_ed'].iloc[0] if not hull_performance_df[hull_performance_df['vessel_name'] == vessel_name].empty else 0
+                    hull_performance_factor = 1 + (hull_performance / 100)
+                    
+                    mcr_value = mcr_df[mcr_df['Vessel_Name'] == vessel_name]['ME_1_MCR_kW'].iloc[0] if not mcr_df[mcr_df['Vessel_Name'] == vessel_name].empty else None
+                    mcr_value = float(mcr_value) if pd.notna(mcr_value) else None
+                    
+                    for _, row in vessel_data.iterrows():
+                        failure_reasons = []
+                        
+                        if me_consumption_check:
+                            me_failure_reasons = validate_me_consumption(row, vessel_data, vessel_type, vessel_coefficients, hull_performance_factor)
+                            failure_reasons.extend(me_failure_reasons)
+                        
+                        if ae_consumption_check:
+                            ae_failure_reasons = validate_ae_consumption(row, vessel_data)
+                            failure_reasons.extend(ae_failure_reasons)
+                        
+                        if boiler_consumption_check:
+                            boiler_failure_reasons = validate_boiler_consumption(row, mcr_value)
+                            failure_reasons.extend(boiler_failure_reasons)
+                        
+                        if failure_reasons:
+                            validation_results.append({
+                                'Vessel Name': vessel_name,
+                                'Report Date': row['reportdate'],
+                                'Remarks': ", ".join(failure_reasons)
+                            })
+                    
+                    # Update progress
+                    progress = (i + 1) / len(vessel_groups)
+                    progress_bar.progress(progress)
+                    progress_text.text(f"Validating: {progress:.0%}")
                 
-                for _, row in vessel_data.iterrows():
-                    failure_reasons = []
-                    
-                    if me_consumption_check:
-                        me_failure_reasons = validate_me_consumption(row, vessel_data, vessel_type, vessel_coefficients, hull_performance_factor)
-                        failure_reasons.extend(me_failure_reasons)
-                    
-                    if ae_consumption_check:
-                        ae_failure_reasons = validate_ae_consumption(row, vessel_data)
-                        failure_reasons.extend(ae_failure_reasons)
-                    
-                    if boiler_consumption_check:
-                        boiler_failure_reasons = validate_boiler_consumption(row, mcr_value)
-                        failure_reasons.extend(boiler_failure_reasons)
-                    
-                    if failure_reasons:
-                        validation_results.append({
-                            'Vessel Name': vessel_name,
-                            'Report Date': row['reportdate'],
-                            'Remarks': ", ".join(failure_reasons)
-                        })
-                
-                # Update progress
-                progress = (i + 1) / len(vessel_groups)
-                progress_bar.progress(progress)
-                progress_text.text(f"Validating: {progress:.0%}")
-            
-            progress_bar.empty()
-            progress_text.empty()
+                progress_bar.empty()
+                progress_text.empty()
         
         # Perform distance validation if selected
         if observed_distance_check:
             with st.spinner('Performing distance validation...'):
-                distance_validation_results = validate_distance_data()
+                distance_validation_results = validate_distance_data(batch_size)
                 validation_results.extend(distance_validation_results.to_dict('records'))
         
         # Combine all validation results
