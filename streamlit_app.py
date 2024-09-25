@@ -17,6 +17,9 @@ ae_consumption_check = st.sidebar.checkbox("AE Consumption", value=True)
 boiler_consumption_check = st.sidebar.checkbox("Boiler Consumption", value=True)
 observed_distance_check = st.sidebar.checkbox("Observed Distance", value=True)
 
+# Option to limit number of vessels
+max_vessels = st.sidebar.number_input("Maximum number of vessels to process (0 for all)", min_value=0, value=0)
+
 if st.button('Validate Data'):
     try:
         # Fetch all necessary data
@@ -28,7 +31,14 @@ if st.button('Validate Data'):
         validation_results = []
         
         if not df.empty:
-            for vessel_name, vessel_data in df.groupby('vessel_name'):
+            vessel_groups = list(df.groupby('vessel_name'))
+            if max_vessels > 0:
+                vessel_groups = vessel_groups[:max_vessels]
+            
+            progress_bar = st.progress(0)
+            progress_text = st.empty()
+            
+            for i, (vessel_name, vessel_data) in enumerate(vessel_groups):
                 vessel_type = vessel_data['vessel_type'].iloc[0]
                 vessel_coefficients = coefficients_df[coefficients_df['vessel_name'] == vessel_name].iloc[0] if not coefficients_df[coefficients_df['vessel_name'] == vessel_name].empty else None
                 
@@ -59,11 +69,20 @@ if st.button('Validate Data'):
                             'Report Date': row['reportdate'],
                             'Remarks': ", ".join(failure_reasons)
                         })
+                
+                # Update progress
+                progress = (i + 1) / len(vessel_groups)
+                progress_bar.progress(progress)
+                progress_text.text(f"Validating: {progress:.0%}")
+            
+            progress_bar.empty()
+            progress_text.empty()
         
         # Perform distance validation if selected
         if observed_distance_check:
-            distance_validation_results = validate_distance_data()
-            validation_results.extend(distance_validation_results.to_dict('records'))
+            with st.spinner('Performing distance validation...'):
+                distance_validation_results = validate_distance_data()
+                validation_results.extend(distance_validation_results.to_dict('records'))
         
         # Combine all validation results
         all_results = pd.DataFrame(validation_results)
