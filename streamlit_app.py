@@ -6,13 +6,30 @@ from validators.ae_consumption_validation import validate_ae_consumption
 from validators.boiler_consumption_validation import validate_boiler_consumption, fetch_mcr_data
 from validators.distance_validation import validate_distance_data
 
-def main():
-    st.set_page_config(layout="wide")
-    
-    # Create three columns: left_sidebar, main_content, right_sidebar
-    left_sidebar, main_content, right_sidebar = st.columns([1, 2, 1])
+# Custom CSS to create a right sidebar
+st.set_page_config(layout="wide")
+st.markdown(
+    """
+    <style>
+    .reportview-container .main .block-container {
+        padding-top: 0rem;
+        padding-right: 1rem;
+        padding-left: 1rem;
+        padding-bottom: 0rem;
+    }
+    .sidebar-content {
+        width: 320px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
-    with left_sidebar:
+def main():
+    # Create columns for main content and right sidebar
+    main_content, right_sidebar = st.columns([3, 1])
+
+    with st.sidebar:
         st.sidebar.title('Validation Settings')
         time_range = st.sidebar.selectbox(
             "Validation Time Range",
@@ -119,49 +136,33 @@ def main():
         st.write("Use the checkboxes in the sidebar to select which validations to run, then click the 'Validate Data' button to start the validation process.")
 
     with right_sidebar:
-        st.sidebar.markdown("<h3 style='text-align: center; color: #1E90FF;'>Validation Checks</h3>", unsafe_allow_html=True)
+        st.title("Validation Checks")
         
-        st.sidebar.markdown("<h4 style='color: #4682B4;'>ME Consumption Validations</h4>", unsafe_allow_html=True)
-        st.sidebar.markdown("""
-        <div style='font-size: 0.8em;'>
-        1. Out of range: 0-50<br>
-        2. High for reported power<br>
-        3. Zero when underway<br>
-        4. Vessel type limit<br>
-        5. Historical comparison (30 days)<br>
-        6. Speed consumption alignment
-        </div>
-        """, unsafe_allow_html=True)
+        st.subheader("ME Consumption Validations")
+        st.write("1. Out of range: Checks if ME consumption is between 0 and 50.")
+        st.write("2. High for reported power: Compares ME consumption to a calculated maximum based on reported power.")
+        st.write("3. Zero when underway: Flags if ME consumption is zero when the vessel is moving.")
+        st.write("4. Vessel type limit: Checks against maximum limits for container and non-container vessels.")
+        st.write("5. Historical comparison: Compares to average consumption for the same load type in the last 30 days.")
+        st.write("6. Speed consumption alignment: Compares to expected consumption based on speed, displacement, and hull performance.")
 
-        st.sidebar.markdown("<h4 style='color: #4682B4;'>AE Consumption Validations</h4>", unsafe_allow_html=True)
-        st.sidebar.markdown("""
-        <div style='font-size: 0.8em;'>
-        1. Out of range: 0-50<br>
-        2. High for reported power<br>
-        3. Zero when generating<br>
-        4. Historical comparison (30 days)<br>
-        5. Zero total consumption
-        </div>
-        """, unsafe_allow_html=True)
+        st.subheader("AE Consumption Validations")
+        st.write("1. Out of range: Checks if AE consumption is between 0 and 50.")
+        st.write("2. High for reported power: Compares AE consumption to a calculated maximum based on reported power.")
+        st.write("3. Zero when generating: Flags if AE consumption is zero when AE power is being generated.")
+        st.write("4. Historical comparison: Compares to average consumption in the last 30 days.")
+        st.write("5. Zero total consumption: Flags if total AE consumption is zero (assuming no shaft generator).")
 
-        st.sidebar.markdown("<h4 style='color: #4682B4;'>Boiler Consumption Validations</h4>", unsafe_allow_html=True)
-        st.sidebar.markdown("""
-        <div style='font-size: 0.8em;'>
-        1. Out of range: 0-100<br>
-        2. Below cargo heating<br>
-        3. Non-zero at high ME load
-        </div>
-        """, unsafe_allow_html=True)
+        st.subheader("Boiler Consumption Validations")
+        st.write("1. Out of range: Checks if boiler consumption is between 0 and 100.")
+        st.write("2. Below cargo heating: Flags if consumption is less than expected cargo heating consumption.")
+        st.write("3. Non-zero at high ME load: Checks if consumption is non-zero when ME load is high during sea passage.")
 
-        st.sidebar.markdown("<h4 style='color: #4682B4;'>Observed Distance Validations</h4>", unsafe_allow_html=True)
-        st.sidebar.markdown("""
-        <div style='font-size: 0.8em;'>
-        1. Negative distance<br>
-        2. Excessive distance<br>
-        3. Zero distance when steaming<br>
-        4. Alignment with calculated
-        </div>
-        """, unsafe_allow_html=True)
+        st.subheader("Observed Distance Validations")
+        st.write("1. Negative distance: Flags if observed distance is negative.")
+        st.write("2. Excessive distance: Checks if observed distance is above a maximum threshold.")
+        st.write("3. Zero distance when steaming: Flags if observed distance is zero when steaming time is non-zero.")
+        st.write("4. Alignment with calculated: Compares observed distance with calculated distance based on GPS coordinates.")
 
 if __name__ == "__main__":
     main()
