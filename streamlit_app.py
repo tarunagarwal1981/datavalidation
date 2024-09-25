@@ -6,39 +6,7 @@ from validators.ae_consumption_validation import validate_ae_consumption
 from validators.boiler_consumption_validation import validate_boiler_consumption, fetch_mcr_data
 from validators.distance_validation import validate_distance_data
 
-# Custom CSS to create a right sidebar with smaller font
 st.set_page_config(layout="wide")
-st.markdown(
-    """
-    <style>
-    .reportview-container .main .block-container {
-        padding-top: 0rem;
-        padding-right: 1rem;
-        padding-left: 1rem;
-        padding-bottom: 0rem;
-    }
-    .sidebar-content {
-        width: 320px;
-    }
-    #right-sidebar {
-        font-size: 8px;
-    }
-    #right-sidebar .stMarkdown {
-        font-size: 8px;
-    }
-    #right-sidebar h1 {
-        font-size: 14px;
-    }
-    #right-sidebar h2 {
-        font-size: 12px;
-    }
-    #right-sidebar h3 {
-        font-size: 10px;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
 
 def main():
     # Create columns for main content and right sidebar
@@ -151,37 +119,49 @@ def main():
         st.write("Use the checkboxes in the sidebar to select which validations to run, then click the 'Validate Data' button to start the validation process.")
 
     with right_sidebar:
-        st.markdown('<div id="right-sidebar">', unsafe_allow_html=True)
+        st.markdown("<h2 style='font-size: 18px;'>Validation Checks</h2>", unsafe_allow_html=True)
         
-        st.title("Validation Checks")
-        
-        st.subheader("ME Consumption Validations")
-        st.write("1. Out of range: Checks if ME consumption is between 0 and 50.")
-        st.write("2. High for reported power: Compares ME consumption to a calculated maximum based on reported power.")
-        st.write("3. Zero when underway: Flags if ME consumption is zero when the vessel is moving.")
-        st.write("4. Vessel type limit: Checks against maximum limits for container and non-container vessels.")
-        st.write("5. Historical comparison: Compares to average consumption for the same load type in the last 30 days.")
-        st.write("6. Speed consumption alignment: Compares to expected consumption based on speed, displacement, and hull performance.")
+        st.markdown("<h3 style='font-size: 14px;'>ME Consumption Validations</h3>", unsafe_allow_html=True)
+        st.markdown("""
+        <div style='font-size: 10px;'>
+        1. Out of range: Checks if ME consumption is between 0 and 50.<br>
+        2. High for reported power: Compares ME consumption to a calculated maximum based on reported power.<br>
+        3. Zero when underway: Flags if ME consumption is zero when the vessel is moving.<br>
+        4. Vessel type limit: Checks against maximum limits for container and non-container vessels.<br>
+        5. Historical comparison: Compares to average consumption for the same load type in the last 30 days.<br>
+        6. Speed consumption alignment: Compares to expected consumption based on speed, displacement, and hull performance.
+        </div>
+        """, unsafe_allow_html=True)
 
-        st.subheader("AE Consumption Validations")
-        st.write("1. Out of range: Checks if AE consumption is between 0 and 50.")
-        st.write("2. High for reported power: Compares AE consumption to a calculated maximum based on reported power.")
-        st.write("3. Zero when generating: Flags if AE consumption is zero when AE power is being generated.")
-        st.write("4. Historical comparison: Compares to average consumption in the last 30 days.")
-        st.write("5. Zero total consumption: Flags if total AE consumption is zero (assuming no shaft generator).")
+        st.markdown("<h3 style='font-size: 14px;'>AE Consumption Validations</h3>", unsafe_allow_html=True)
+        st.markdown("""
+        <div style='font-size: 10px;'>
+        1. Out of range: Checks if AE consumption is between 0 and 50.<br>
+        2. High for reported power: Compares AE consumption to a calculated maximum based on reported power.<br>
+        3. Zero when generating: Flags if AE consumption is zero when AE power is being generated.<br>
+        4. Historical comparison: Compares to average consumption in the last 30 days.<br>
+        5. Zero total consumption: Flags if total AE consumption is zero (assuming no shaft generator).
+        </div>
+        """, unsafe_allow_html=True)
 
-        st.subheader("Boiler Consumption Validations")
-        st.write("1. Out of range: Checks if boiler consumption is between 0 and 100.")
-        st.write("2. Below cargo heating: Flags if consumption is less than expected cargo heating consumption.")
-        st.write("3. Non-zero at high ME load: Checks if consumption is non-zero when ME load is high during sea passage.")
+        st.markdown("<h3 style='font-size: 14px;'>Boiler Consumption Validations</h3>", unsafe_allow_html=True)
+        st.markdown("""
+        <div style='font-size: 10px;'>
+        1. Out of range: Checks if boiler consumption is between 0 and 100.<br>
+        2. Below cargo heating: Flags if consumption is less than expected cargo heating consumption.<br>
+        3. Non-zero at high ME load: Checks if consumption is non-zero when ME load is high during sea passage.
+        </div>
+        """, unsafe_allow_html=True)
 
-        st.subheader("Observed Distance Validations")
-        st.write("1. Negative distance: Flags if observed distance is negative.")
-        st.write("2. Excessive distance: Checks if observed distance is above a maximum threshold.")
-        st.write("3. Zero distance when steaming: Flags if observed distance is zero when steaming time is non-zero.")
-        st.write("4. Alignment with calculated: Compares observed distance with calculated distance based on GPS coordinates.")
-        
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("<h3 style='font-size: 14px;'>Observed Distance Validations</h3>", unsafe_allow_html=True)
+        st.markdown("""
+        <div style='font-size: 10px;'>
+        1. Negative distance: Flags if observed distance is negative.<br>
+        2. Excessive distance: Checks if observed distance is above a maximum threshold.<br>
+        3. Zero distance when steaming: Flags if observed distance is zero when steaming time is non-zero.<br>
+        4. Alignment with calculated: Compares observed distance with calculated distance based on GPS coordinates.
+        </div>
+        """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
