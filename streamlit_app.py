@@ -6,7 +6,7 @@ from validators.ae_consumption_validation import validate_ae_consumption
 from validators.boiler_consumption_validation import validate_boiler_consumption, fetch_mcr_data
 from validators.distance_validation import validate_distance_data
 
-# Custom CSS to create a right sidebar
+# Custom CSS to create a right sidebar with smaller font
 st.set_page_config(layout="wide")
 st.markdown(
     """
@@ -19,6 +19,21 @@ st.markdown(
     }
     .sidebar-content {
         width: 320px;
+    }
+    #right-sidebar {
+        font-size: 10px;
+    }
+    #right-sidebar .stMarkdown {
+        font-size: 10px;
+    }
+    #right-sidebar h1 {
+        font-size: 18px;
+    }
+    #right-sidebar h2 {
+        font-size: 16px;
+    }
+    #right-sidebar h3 {
+        font-size: 14px;
     }
     </style>
     """,
@@ -136,6 +151,8 @@ def main():
         st.write("Use the checkboxes in the sidebar to select which validations to run, then click the 'Validate Data' button to start the validation process.")
 
     with right_sidebar:
+        st.markdown('<div id="right-sidebar">', unsafe_allow_html=True)
+        
         st.title("Validation Checks")
         
         st.subheader("ME Consumption Validations")
@@ -163,6 +180,8 @@ def main():
         st.write("2. Excessive distance: Checks if observed distance is above a maximum threshold.")
         st.write("3. Zero distance when steaming: Flags if observed distance is zero when steaming time is non-zero.")
         st.write("4. Alignment with calculated: Compares observed distance with calculated distance based on GPS coordinates.")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
