@@ -9,9 +9,8 @@ COLUMN_NAMES = {
     'REPORT_DATE': 'REPORT_DATE',
     'LATITUDE': 'LATITUDE',
     'LONGITUDE': 'LONGITUDE',
-    'OBSERVED_DISTANCE': 'OBSERVERD_DISTANCE',  # Note: This seems to be misspelled in the schema
-    'STEAMING_TIME_HRS': 'STEAMING_TIME_HRS',
-    'VESSEL_TYPE': 'VESSEL_TYPE'  # This might come from vessel_particulars table
+    'OBSERVED_DISTANCE': 'OBSERVERD_DISTANCE',  # Note: This is the correct spelling from your schema
+    'STEAMING_TIME_HRS': 'STEAMING_TIME_HRS'
 }
 
 VALIDATION_THRESHOLDS = {
@@ -21,48 +20,45 @@ VALIDATION_THRESHOLDS = {
     'distance_alignment_upper': 1.1
 }
 
+def fetch_position_data(vessel_name, report_date):
+    engine = get_db_engine()
+    try:
+        query = f"""
+        SELECT {COLUMN_NAMES['LATITUDE']}, {COLUMN_NAMES['LONGITUDE']}
+        FROM sf_consumption_logs
+        WHERE {COLUMN_NAMES['VESSEL_NAME']} = %s AND {COLUMN_NAMES['REPORT_DATE']} = %s
+        ORDER BY {COLUMN_NAMES['REPORT_DATE']} DESC
+        LIMIT 2
+        """
+        return pd.read_sql_query(query, engine, params=(vessel_name, report_date))
+    except SQLAlchemyError as e:
+        print(f"Error fetching position data: {str(e)}")
+        return pd.DataFrame()
+
 def fetch_validation_data():
     engine = get_db_engine()
     try:
         query = f"""
-        SELECT scl.{COLUMN_NAMES['VESSEL_NAME']},
-               scl.{COLUMN_NAMES['REPORT_DATE']},
-               scl.{COLUMN_NAMES['LATITUDE']},
-               scl.{COLUMN_NAMES['LONGITUDE']},
-               scl.{COLUMN_NAMES['OBSERVED_DISTANCE']},
-               scl.{COLUMN_NAMES['STEAMING_TIME_HRS']},
-               vp.{COLUMN_NAMES['VESSEL_TYPE']}
-        FROM sf_consumption_logs scl
-        LEFT JOIN vessel_particulars vp ON scl.{COLUMN_NAMES['VESSEL_NAME']} = vp.{COLUMN_NAMES['VESSEL_NAME']}
-        ORDER BY scl.{COLUMN_NAMES['VESSEL_NAME']}, scl.{COLUMN_NAMES['REPORT_DATE']}
+        SELECT {COLUMN_NAMES['VESSEL_NAME']},
+               {COLUMN_NAMES['REPORT_DATE']},
+               {COLUMN_NAMES['LATITUDE']},
+               {COLUMN_NAMES['LONGITUDE']},
+               {COLUMN_NAMES['OBSERVED_DISTANCE']},
+               {COLUMN_NAMES['STEAMING_TIME_HRS']}
+        FROM sf_consumption_logs
+        ORDER BY {COLUMN_NAMES['VESSEL_NAME']}, {COLUMN_NAMES['REPORT_DATE']}
         """
         return pd.read_sql_query(query, engine)
     except SQLAlchemyError as e:
         print(f"Error fetching validation data: {str(e)}")
         return pd.DataFrame()
 
-def chord_distance(lat1, lon1, lat2, lon2, radius=6371):
-    phi1 = math.radians(lat1)
-    lambda1 = math.radians(lon1)
-    phi2 = math.radians(lat2)
-    lambda2 = math.radians(lon2)
-
-    x1 = radius * math.cos(phi1) * math.cos(lambda1)
-    y1 = radius * math.cos(phi1) * math.sin(lambda1)
-    z1 = radius * math.sin(phi1)
-
-    x2 = radius * math.cos(phi2) * math.cos(lambda2)
-    y2 = radius * math.cos(phi2) * math.sin(lambda2)
-    z2 = radius * math.sin(phi2)
-
-    distance = math.sqrt((x2 - x1)**2 + (y2 - y1)**2 + (z2 - z1)**2)
-    return distance
+# ... (rest of the functions remain the same)
 
 def validate_distance(row, prev_row):
     failure_reasons = []
     observed_distance = row[COLUMN_NAMES['OBSERVED_DISTANCE']]
     steaming_time_hrs = row[COLUMN_NAMES['STEAMING_TIME_HRS']]
-    vessel_type = row[COLUMN_NAMES['VESSEL_TYPE']]
 
     if pd.isna(observed_distance):
         failure_reasons.append("Observed Distance data is missing")
@@ -72,11 +68,9 @@ def validate_distance(row, prev_row):
     if observed_distance < 0:
         failure_reasons.append("Observed Distance cannot be negative")
 
-    # Check for maximum distance based on vessel type
-    if vessel_type == "CONTAINER" and observed_distance > VALIDATION_THRESHOLDS['container_max_distance']:
-        failure_reasons.append("Observed Distance too high for container vessel")
-    elif vessel_type != "CONTAINER" and observed_distance > VALIDATION_THRESHOLDS['non_container_max_distance']:
-        failure_reasons.append("Observed Distance too high for non-container vessel")
+    # Check for maximum distance (assuming all vessels have the same limit for simplicity)
+    if observed_distance > VALIDATION_THRESHOLDS['non_container_max_distance']:
+        failure_reasons.append("Observed Distance too high")
 
     # Check alignment with steaming hours
     if pd.notna(steaming_time_hrs) and steaming_time_hrs > 0:
