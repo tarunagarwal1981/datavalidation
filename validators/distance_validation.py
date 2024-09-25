@@ -21,7 +21,7 @@ VALIDATION_THRESHOLDS = {
 }
 
 @st.cache_data
-def fetch_validation_data():
+def fetch_validation_data(date_filter):
     engine = get_db_engine()
     try:
         query = f"""
@@ -32,9 +32,10 @@ def fetch_validation_data():
                "{COLUMN_NAMES['OBSERVED_DISTANCE']}", 
                "{COLUMN_NAMES['STEAMING_TIME_HRS']}"
         FROM sf_consumption_logs
+        WHERE "{COLUMN_NAMES['REPORT_DATE']}" >= %s
         ORDER BY "{COLUMN_NAMES['VESSEL_NAME']}", "{COLUMN_NAMES['REPORT_DATE']}"
         """
-        return pd.read_sql_query(query, engine)
+        return pd.read_sql_query(query, engine, params=(date_filter,))
     except SQLAlchemyError as e:
         st.error(f"Error fetching validation data: {str(e)}")
         return pd.DataFrame()
@@ -102,8 +103,8 @@ def validate_distance_batch(df):
     
     return failure_reasons
 
-def validate_distance_data(batch_size=1000):
-    df = fetch_validation_data()
+def validate_distance_data(date_filter, batch_size=1000):
+    df = fetch_validation_data(date_filter)
     validation_results = []
 
     if df.empty:
@@ -131,5 +132,5 @@ def validate_distance_data(batch_size=1000):
     return pd.DataFrame(validation_results)
 
 if __name__ == "__main__":
-    results = validate_distance_data()
+    results = validate_distance_data(datetime.now() - timedelta(days=30))  # Example: last 30 days
     print(results)
