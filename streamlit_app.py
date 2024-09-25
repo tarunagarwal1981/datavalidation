@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from datetime import datetime, timedelta
 from validators.me_consumption_validation import validate_me_consumption, fetch_vessel_performance_data, fetch_vessel_coefficients, fetch_hull_performance_data
 from validators.ae_consumption_validation import validate_ae_consumption
 from validators.boiler_consumption_validation import validate_boiler_consumption, fetch_mcr_data
@@ -7,8 +8,20 @@ from validators.distance_validation import validate_distance_data
 
 st.title('Vessel Data Validation')
 
-# Sidebar information
-st.sidebar.write("Data validation happened for the last 3 months.")
+# Sidebar information and filters
+st.sidebar.write("Select the time range for data validation:")
+time_range = st.sidebar.selectbox(
+    "Validation Time Range",
+    ("Last 1 Month", "Last 3 Months", "Last 6 Months")
+)
+
+# Convert time range to timedelta
+if time_range == "Last 1 Month":
+    date_filter = datetime.now() - timedelta(days=30)
+elif time_range == "Last 3 Months":
+    date_filter = datetime.now() - timedelta(days=90)
+else:  # Last 6 Months
+    date_filter = datetime.now() - timedelta(days=180)
 
 # Validation criteria checkboxes
 st.sidebar.write("Validation Criteria:")
@@ -29,7 +42,7 @@ if st.button('Validate Data'):
 
         # Perform non-distance validations
         if me_consumption_check or ae_consumption_check or boiler_consumption_check:
-            df = fetch_vessel_performance_data()
+            df = fetch_vessel_performance_data(date_filter)
             coefficients_df = fetch_vessel_coefficients()
             hull_performance_df = fetch_hull_performance_data()
             mcr_df = fetch_mcr_data()
@@ -60,11 +73,11 @@ if st.button('Validate Data'):
                             failure_reasons.extend(me_failure_reasons)
                         
                         if ae_consumption_check:
-                            ae_failure_reasons = validate_ae_consumption(row, vessel_data)
+                            ae_failure_reasons = validate_ae_consumption(row, vessel_data, date_filter)
                             failure_reasons.extend(ae_failure_reasons)
                         
                         if boiler_consumption_check:
-                            boiler_failure_reasons = validate_boiler_consumption(row, mcr_value)
+                            boiler_failure_reasons = validate_boiler_consumption(row, mcr_value, date_filter)
                             failure_reasons.extend(boiler_failure_reasons)
                         
                         if failure_reasons:
@@ -85,7 +98,7 @@ if st.button('Validate Data'):
         # Perform distance validation if selected
         if observed_distance_check:
             with st.spinner('Performing distance validation...'):
-                distance_validation_results = validate_distance_data(batch_size)
+                distance_validation_results = validate_distance_data(date_filter, batch_size)
                 validation_results.extend(distance_validation_results.to_dict('records'))
         
         # Combine all validation results
