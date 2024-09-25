@@ -20,43 +20,46 @@ VALIDATION_THRESHOLDS = {
     'distance_alignment_upper': 1.1
 }
 
-def fetch_position_data(vessel_name, report_date):
-    engine = get_db_engine()
-    try:
-        query = f"""
-        SELECT {COLUMN_NAMES['LATITUDE']}, {COLUMN_NAMES['LONGITUDE']}
-        FROM sf_consumption_logs
-        WHERE {COLUMN_NAMES['VESSEL_NAME']} = %s AND {COLUMN_NAMES['REPORT_DATE']} = %s
-        ORDER BY {COLUMN_NAMES['REPORT_DATE']} DESC
-        LIMIT 2
-        """
-        return pd.read_sql_query(query, engine, params=(vessel_name, report_date))
-    except SQLAlchemyError as e:
-        print(f"Error fetching position data: {str(e)}")
-        return pd.DataFrame()
-
 def fetch_validation_data():
     engine = get_db_engine()
     try:
         query = f"""
-        SELECT {COLUMN_NAMES['VESSEL_NAME']},
-               {COLUMN_NAMES['REPORT_DATE']},
-               {COLUMN_NAMES['LATITUDE']},
-               {COLUMN_NAMES['LONGITUDE']},
-               {COLUMN_NAMES['OBSERVED_DISTANCE']},
-               {COLUMN_NAMES['STEAMING_TIME_HRS']}
+        SELECT *
         FROM sf_consumption_logs
-        ORDER BY {COLUMN_NAMES['VESSEL_NAME']}, {COLUMN_NAMES['REPORT_DATE']}
+        ORDER BY "VESSEL_NAME", "REPORT_DATE"
         """
         return pd.read_sql_query(query, engine)
     except SQLAlchemyError as e:
         print(f"Error fetching validation data: {str(e)}")
         return pd.DataFrame()
 
-# ... (rest of the functions remain the same)
+def chord_distance(lat1, lon1, lat2, lon2, radius=6371):
+    phi1 = math.radians(lat1)
+    lambda1 = math.radians(lon1)
+    phi2 = math.radians(lat2)
+    lambda2 = math.radians(lon2)
+
+    x1 = radius * math.cos(phi1) * math.cos(lambda1)
+    y1 = radius * math.cos(phi1) * math.sin(lambda1)
+    z1 = radius * math.sin(phi1)
+
+    x2 = radius * math.cos(phi2) * math.cos(lambda2)
+    y2 = radius * math.cos(phi2) * math.sin(lambda2)
+    z2 = radius * math.sin(phi2)
+
+    distance = math.sqrt((x2 - x1)**2 + (y2 - y1)**2 + (z2 - z1)**2)
+    return distance
 
 def validate_distance(row, prev_row):
     failure_reasons = []
+    
+    # Check if required columns exist
+    required_columns = [COLUMN_NAMES['OBSERVED_DISTANCE'], COLUMN_NAMES['STEAMING_TIME_HRS'], 
+                        COLUMN_NAMES['LATITUDE'], COLUMN_NAMES['LONGITUDE']]
+    missing_columns = [col for col in required_columns if col not in row.index]
+    if missing_columns:
+        return [f"Missing columns: {', '.join(missing_columns)}"]
+
     observed_distance = row[COLUMN_NAMES['OBSERVED_DISTANCE']]
     steaming_time_hrs = row[COLUMN_NAMES['STEAMING_TIME_HRS']]
 
@@ -99,14 +102,17 @@ def validate_distance_data():
     df = fetch_validation_data()
     validation_results = []
 
-    for vessel_name, vessel_data in df.groupby(COLUMN_NAMES['VESSEL_NAME']):
+    if df.empty:
+        return pd.DataFrame(columns=['Vessel Name', 'Report Date', 'Remarks'])
+
+    for vessel_name, vessel_data in df.groupby('VESSEL_NAME'):
         prev_row = None
         for _, row in vessel_data.iterrows():
             failure_reasons = validate_distance(row, prev_row)
             if failure_reasons:
                 validation_results.append({
                     'Vessel Name': vessel_name,
-                    'Report Date': row[COLUMN_NAMES['REPORT_DATE']],
+                    'Report Date': row['REPORT_DATE'],
                     'Remarks': ", ".join(failure_reasons)
                 })
             prev_row = row
