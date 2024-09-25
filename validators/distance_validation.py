@@ -10,7 +10,7 @@ COLUMN_NAMES = {
     'REPORT_DATE': 'REPORT_DATE',
     'LATITUDE': 'LATITUDE',
     'LONGITUDE': 'LONGITUDE',
-    'OBSERVED_DISTANCE': 'OBSERVERD_DISTANCE',
+    'OBSERVED_DISTANCE': 'OBSERVERD_DISTANCE',  # Note: This is the correct spelling from your schema
     'STEAMING_TIME_HRS': 'STEAMING_TIME_HRS'
 }
 
@@ -25,9 +25,14 @@ def fetch_validation_data():
     engine = get_db_engine()
     try:
         query = f"""
-        SELECT {', '.join(COLUMN_NAMES.values())}
+        SELECT "{COLUMN_NAMES['VESSEL_NAME']}", 
+               "{COLUMN_NAMES['REPORT_DATE']}", 
+               "{COLUMN_NAMES['LATITUDE']}", 
+               "{COLUMN_NAMES['LONGITUDE']}", 
+               "{COLUMN_NAMES['OBSERVED_DISTANCE']}", 
+               "{COLUMN_NAMES['STEAMING_TIME_HRS']}"
         FROM sf_consumption_logs
-        ORDER BY {COLUMN_NAMES['VESSEL_NAME']}, {COLUMN_NAMES['REPORT_DATE']}
+        ORDER BY "{COLUMN_NAMES['VESSEL_NAME']}", "{COLUMN_NAMES['REPORT_DATE']}"
         """
         return pd.read_sql_query(query, engine)
     except SQLAlchemyError as e:
