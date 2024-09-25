@@ -21,19 +21,19 @@ st.markdown(
         width: 320px;
     }
     #right-sidebar {
-        font-size: 10px;
+        font-size: 8px;
     }
     #right-sidebar .stMarkdown {
         font-size: 8px;
     }
     #right-sidebar h1 {
-        font-size: 18px;
+        font-size: 14px;
     }
     #right-sidebar h2 {
-        font-size: 16px;
+        font-size: 12px;
     }
     #right-sidebar h3 {
-        font-size: 14px;
+        font-size: 10px;
     }
     </style>
     """,
