@@ -10,6 +10,13 @@ st.title('Vessel Data Validation')
 # Sidebar information
 st.sidebar.write("Data validation happened for the last 3 months.")
 
+# Validation criteria checkboxes
+st.sidebar.write("Validation Criteria:")
+me_consumption_check = st.sidebar.checkbox("ME Consumption", value=True)
+ae_consumption_check = st.sidebar.checkbox("AE Consumption", value=True)
+boiler_consumption_check = st.sidebar.checkbox("Boiler Consumption", value=True)
+observed_distance_check = st.sidebar.checkbox("Observed Distance", value=True)
+
 if st.button('Validate Data'):
     try:
         # Fetch all necessary data
@@ -32,11 +39,19 @@ if st.button('Validate Data'):
                 mcr_value = float(mcr_value) if pd.notna(mcr_value) else None
                 
                 for _, row in vessel_data.iterrows():
-                    me_failure_reasons = validate_me_consumption(row, vessel_data, vessel_type, vessel_coefficients, hull_performance_factor)
-                    ae_failure_reasons = validate_ae_consumption(row, vessel_data)
-                    boiler_failure_reasons = validate_boiler_consumption(row, mcr_value)
+                    failure_reasons = []
                     
-                    failure_reasons = me_failure_reasons + ae_failure_reasons + boiler_failure_reasons
+                    if me_consumption_check:
+                        me_failure_reasons = validate_me_consumption(row, vessel_data, vessel_type, vessel_coefficients, hull_performance_factor)
+                        failure_reasons.extend(me_failure_reasons)
+                    
+                    if ae_consumption_check:
+                        ae_failure_reasons = validate_ae_consumption(row, vessel_data)
+                        failure_reasons.extend(ae_failure_reasons)
+                    
+                    if boiler_consumption_check:
+                        boiler_failure_reasons = validate_boiler_consumption(row, mcr_value)
+                        failure_reasons.extend(boiler_failure_reasons)
                     
                     if failure_reasons:
                         validation_results.append({
@@ -45,11 +60,13 @@ if st.button('Validate Data'):
                             'Remarks': ", ".join(failure_reasons)
                         })
         
-        # Perform distance validation
-        distance_validation_results = validate_distance_data()
+        # Perform distance validation if selected
+        if observed_distance_check:
+            distance_validation_results = validate_distance_data()
+            validation_results.extend(distance_validation_results.to_dict('records'))
         
         # Combine all validation results
-        all_results = pd.concat([pd.DataFrame(validation_results), distance_validation_results], ignore_index=True)
+        all_results = pd.DataFrame(validation_results)
         
         if not all_results.empty:
             st.write("Validation Results:")
@@ -63,12 +80,5 @@ if st.button('Validate Data'):
     except Exception as e:
         st.error(f"An error occurred: {str(e)}")
 
-# Optional: Add more Streamlit components for user interaction or data visualization
-st.sidebar.write("Validation Criteria:")
-st.sidebar.write("- ME Consumption")
-st.sidebar.write("- AE Consumption")
-st.sidebar.write("- Boiler Consumption")
-st.sidebar.write("- Observed Distance")
-
-st.write("This application validates vessel performance data based on multiple criteria.")
-st.write("Click the 'Validate Data' button to start the validation process.")
+st.write("This application validates vessel performance data based on selected criteria.")
+st.write("Use the checkboxes in the sidebar to select which validations to run, then click the 'Validate Data' button to start the validation process.")
