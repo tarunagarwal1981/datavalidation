@@ -5,13 +5,13 @@ from sqlalchemy.exc import SQLAlchemyError
 
 # Configuration
 COLUMN_NAMES = {
-    'VESSEL_NAME': 'vessel_name',
-    'REPORT_DATE': 'report_date',
-    'LATITUDE': 'latitude',
-    'LONGITUDE': 'longitude',
-    'OBSERVED_DISTANCE': 'observed_distance',
-    'STEAMING_TIME_HRS': 'steaming_time_hrs',
-    'VESSEL_TYPE': 'vessel_type'
+    'VESSEL_NAME': 'VESSEL_NAME',
+    'REPORT_DATE': 'REPORT_DATE',
+    'LATITUDE': 'LATITUDE',
+    'LONGITUDE': 'LONGITUDE',
+    'OBSERVED_DISTANCE': 'OBSERVERD_DISTANCE',  # Note: This seems to be misspelled in the schema
+    'STEAMING_TIME_HRS': 'STEAMING_TIME_HRS',
+    'VESSEL_TYPE': 'VESSEL_TYPE'  # This might come from vessel_particulars table
 }
 
 VALIDATION_THRESHOLDS = {
@@ -81,7 +81,7 @@ def validate_distance(row, prev_row):
     # Check alignment with steaming hours
     if pd.notna(steaming_time_hrs) and steaming_time_hrs > 0:
         if observed_distance == 0:
-            failure_reasons.append("Observed Distance cannot be zero when steaming")
+            failure_reasons.append("Observed Distance cannot be zero when streaming")
         else:
             expected_distance = steaming_time_hrs * 1  # Assuming average speed of 1 for now
             if not (VALIDATION_THRESHOLDS['distance_alignment_lower'] * expected_distance <= observed_distance <= VALIDATION_THRESHOLDS['distance_alignment_upper'] * expected_distance):
