@@ -1,4 +1,5 @@
 import pandas as pd
+from database import get_db_engine
 
 # Configuration
 COLUMN_NAMES = {
@@ -20,9 +21,9 @@ VALIDATION_THRESHOLDS = {
 def is_value_in_range(value, min_val, max_val):
     return min_val <= value <= max_val if pd.notna(value) else False
 
-def calculate_historical_average(df, days=30):
+def calculate_historical_average(df, date_filter, days=30):
     def calculate_avg_consumption(group):
-        relevant_data = group.sort_values(COLUMN_NAMES['REPORT_DATE']).tail(days)
+        relevant_data = group[group[COLUMN_NAMES['REPORT_DATE']] >= date_filter].sort_values(COLUMN_NAMES['REPORT_DATE']).tail(days)
         if len(relevant_data) >= 10:
             total_consumption = relevant_data[COLUMN_NAMES['AE_CONSUMPTION']].sum()
             total_running_time = relevant_data[COLUMN_NAMES['AE_RUN_HOURS']].sum()
@@ -41,8 +42,18 @@ def is_value_within_percentage(value, reference, lower_percentage, upper_percent
 def calculate_power_based_consumption(power, run_hours, factor):
     return (factor * power) * run_hours / 10**6 if pd.notna(power) and pd.notna(run_hours) and power > 0 else None
 
+# Data fetching function
+def fetch_ae_data(date_filter):
+    engine = get_db_engine()
+    query = """
+    SELECT *
+    FROM vessel_performance_summary
+    WHERE reportdate >= %s;
+    """
+    return pd.read_sql_query(query, engine, params=(date_filter,))
+
 # Main validation function
-def validate_ae_consumption(row, vessel_data):
+def validate_ae_consumption(row, vessel_data, date_filter):
     failure_reasons = []
     ae_consumption = row[COLUMN_NAMES['AE_CONSUMPTION']]
     avg_ae_power = row[COLUMN_NAMES['AVG_AE_POWER']]
@@ -63,7 +74,9 @@ def validate_ae_consumption(row, vessel_data):
             failure_reasons.append("AE Consumption cannot be zero when generating power")
 
         # Historical comparison
-        historical_data = calculate_historical_average(vessel_data)
+        if vessel_data is None:
+            vessel_data = fetch_ae_data(date_filter)
+        historical_data = calculate_historical_average(vessel_data, date_filter)
         if historical_data:
             avg_consumption = historical_data.get(row['vessel_name'])
             if avg_consumption is not None:
