@@ -18,14 +18,17 @@ VALIDATION_THRESHOLDS = {
 EVENT_AT_SEA = 'NOON AT SEA'
 
 # Data fetching function
-def fetch_mcr_data():
+def fetch_mcr_data(date_filter):
     engine = get_db_engine()
     query = """
-    SELECT "Vessel_Name", 
-           CAST(NULLIF("ME_1_MCR_kW", '') AS FLOAT) AS "ME_1_MCR_kW"
-    FROM machinery_particulars;
+    SELECT mp."Vessel_Name", 
+           CAST(NULLIF(mp."ME_1_MCR_kW", '') AS FLOAT) AS "ME_1_MCR_kW"
+    FROM machinery_particulars mp
+    JOIN vessel_performance_summary vps ON mp."Vessel_Name" = vps.vessel_name
+    WHERE vps.reportdate >= %s
+    GROUP BY mp."Vessel_Name", mp."ME_1_MCR_kW";
     """
-    return pd.read_sql_query(query, engine)
+    return pd.read_sql_query(query, engine, params=(date_filter,))
 
 # Utility functions
 def calculate_me_load(me_power, mcr):
