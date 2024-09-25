@@ -24,7 +24,7 @@ st.markdown(
         font-size: 10px;
     }
     #right-sidebar .stMarkdown {
-        font-size: 10px;
+        font-size: 8px;
     }
     #right-sidebar h1 {
         font-size: 18px;
