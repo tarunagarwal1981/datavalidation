@@ -12,14 +12,15 @@ st.sidebar.write("Data validation happened for the last 3 months.")
 
 if st.button('Validate Data'):
     try:
+        # Fetch all necessary data
         df = fetch_vessel_performance_data()
         coefficients_df = fetch_vessel_coefficients()
         hull_performance_df = fetch_hull_performance_data()
         mcr_df = fetch_mcr_data()
         
+        validation_results = []
+        
         if not df.empty:
-            validation_results = []
-            
             for vessel_name, vessel_data in df.groupby('vessel_name'):
                 vessel_type = vessel_data['vessel_type'].iloc[0]
                 vessel_coefficients = coefficients_df[coefficients_df['vessel_name'] == vessel_name].iloc[0] if not coefficients_df[coefficients_df['vessel_name'] == vessel_name].empty else None
@@ -43,22 +44,21 @@ if st.button('Validate Data'):
                             'Report Date': row['reportdate'],
                             'Remarks': ", ".join(failure_reasons)
                         })
+        
+        # Perform distance validation
+        distance_validation_results = validate_distance_data()
+        
+        # Combine all validation results
+        all_results = pd.concat([pd.DataFrame(validation_results), distance_validation_results], ignore_index=True)
+        
+        if not all_results.empty:
+            st.write("Validation Results:")
+            st.dataframe(all_results)
             
-            # Add distance validation results
-            distance_validation_results = validate_distance_data()
-            validation_results.extend(distance_validation_results.to_dict('records'))
-            
-            if validation_results:
-                result_df = pd.DataFrame(validation_results)
-                st.write("Validation Results:")
-                st.dataframe(result_df)
-                
-                csv = result_df.to_csv(index=False)
-                st.download_button(label="Download validation report as CSV", data=csv, file_name='validation_report.csv', mime='text/csv')
-            else:
-                st.write("All data passed the validation checks!")
+            csv = all_results.to_csv(index=False)
+            st.download_button(label="Download validation report as CSV", data=csv, file_name='validation_report.csv', mime='text/csv')
         else:
-            st.write("No data found for the last 3 months.")
+            st.write("All data passed the validation checks!")
     
     except Exception as e:
         st.error(f"An error occurred: {str(e)}")
