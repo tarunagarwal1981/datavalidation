@@ -29,7 +29,7 @@ VALIDATION_THRESHOLDS = {
 }
 
 # Data fetching functions
-def fetch_vessel_performance_data():
+def fetch_vessel_performance_data(date_filter):
     engine = get_db_engine()
     query = """
     SELECT vps.*, vp.vessel_type
@@ -37,8 +37,7 @@ def fetch_vessel_performance_data():
     LEFT JOIN vessel_particulars vp ON vps.vessel_name = vp.vessel_name
     WHERE vps.reportdate >= %s;
     """
-    three_months_ago = datetime.now() - timedelta(days=90)
-    df = pd.read_sql_query(query, engine, params=(three_months_ago,))
+    df = pd.read_sql_query(query, engine, params=(date_filter,))
     return df
 
 def fetch_vessel_coefficients():
