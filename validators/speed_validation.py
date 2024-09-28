@@ -105,7 +105,7 @@ def fetch_speed_data(date_filter):
     engine = get_db_engine()
     query = """
     SELECT *
-    FROM sf_consumption_log
+    FROM vessel_performance_summary
     WHERE reportdate >= %s;
     """
     return pd.read_sql_query(query, engine, params=(date_filter,))
