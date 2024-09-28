@@ -50,7 +50,7 @@ def main():
                     coefficients_df = fetch_vessel_coefficients()
                     hull_performance_df = fetch_hull_performance_data()
                     mcr_df = fetch_mcr_data(date_filter)
-                    speed_df = fetch_speed_data(date_filter)
+                    #speed_df = fetch_speed_data(date_filter)
                     
                     if not df.empty:
                         vessel_groups = list(df.groupby('vessel_name'))
