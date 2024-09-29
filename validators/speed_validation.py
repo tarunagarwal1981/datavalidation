@@ -110,5 +110,4 @@ def fetch_speed_data(date_filter):
     """
     return pd.read_sql_query(query, engine, params=(date_filter,))
 
-data = fetch_speed_data(date_filter='2023-01-01')
-print(data.head())  # Check the first few rows of the data
+
