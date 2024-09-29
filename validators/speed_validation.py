@@ -55,13 +55,17 @@ def get_vessel_type(vessel_name):
 def is_value_in_range(value, min_val, max_val):
     return min_val <= value <= max_val if pd.notna(value) else False
 
-# Main validation function
 def validate_speed(row, vessel_type_cache={}):
     failure_reasons = []
     
-    speed = row[COLUMN_NAMES['SPEED']]
-    vessel_name = row[COLUMN_NAMES['VESSEL_NAME']]
     vessel_status = row[COLUMN_NAMES['EVENT']]
+    speed = row[COLUMN_NAMES['SPEED']]
+
+    # Check if the event is not 'NOON AT SEA' and speed is missing or null
+    if vessel_status != VESSEL_STATUSES['AT_SEA'] and pd.isna(speed):
+        return []  # Ignore this row and return an empty list
+
+    vessel_name = row[COLUMN_NAMES['VESSEL_NAME']]
     steaming_hours = row[COLUMN_NAMES['STEAMING_HOURS']]
     observed_distance = row[COLUMN_NAMES['OBSERVED_DISTANCE']]
     me_rpm = row[COLUMN_NAMES['ME_RPM']]
@@ -111,27 +115,12 @@ def validate_speed(row, vessel_type_cache={}):
             if me_rpm == 0 or me_run_hours == 0 or me_consumption == 0:
                 failure_reasons.append("Inconsistent data: Speed > 0 but engine parameters indicate no movement")
     else:
-        failure_reasons.append("Speed data is missing")
+        # Only add this failure reason if it's a 'NOON AT SEA' event
+        if vessel_status == VESSEL_STATUSES['AT_SEA']:
+            failure_reasons.append("Speed data is missing for NOON AT SEA event")
 
-    # print(f"Processing row: {row}")
-
-    # print("Debug: Entered validate_speed function")
-    # print("Debug: Row data:", row)
-    # print("Debug: Row columns:", row.index.tolist())
-    # print("Debug: COLUMN_NAMES:", COLUMN_NAMES)
-
-    # try:
-    #     speed = row[COLUMN_NAMES['SPEED']]
-    #     print(f"Debug: Speed value: {speed}")
-    # except KeyError as e:
-    #     print(f"Debug: KeyError occurred: {e}")
-    #     print(f"Debug: Available columns: {row.index.tolist()}")
-    #     return ["Unable to validate speed due to missing data"]
     return failure_reasons
 
-
-
-# Data fetching function (placeholder)
 def fetch_speed_data(date_filter):
     engine = get_db_engine()
     query = """
@@ -143,7 +132,3 @@ def fetch_speed_data(date_filter):
     print("Fetched Data: \n", data.head())  # Print first few rows of data
     print("Columns: ", data.columns)  # Print the columns to check
     return data
-    
-    #return pd.read_sql_query(query, engine, params=(date_filter,))
-
-
