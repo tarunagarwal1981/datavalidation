@@ -1,19 +1,31 @@
 import pandas as pd
 from database import get_db_engine
 
-
-# Configuration
 COLUMN_NAMES = {
-    'SPEED': 'SPEED',
-    'VESSEL_NAME': 'VESSEL_NAME',
-    'EVENT': 'EVENT',
-    'STEAMING_HOURS': 'STEAMING_TIME_HRS',
-    'OBSERVED_DISTANCE': 'OBSERVERD_DISTANCE',
-    'ME_RPM': 'MERPM',
-    'ME_RUN_HOURS': 'ME_RUNNING_HOURS_DAILY',
-    'ME_CONSUMPTION': 'ME_CONSUMPTION',
-    'REPORT_DATE': 'REPORT_DATE'
+    'ME_CONSUMPTION': 'actual_me_consumption',
+    'ME_RPM': 'me_rpm',
+    'ME_RUN_HOURS': 'steaming_time_hrs',
+    'SPEED': 'observed_speed',
+    'DISPLACEMENT': 'displacement',
+    'STREAMING_HOURS': 'steaming_time_hrs',
+    'REPORT_DATE': 'reportdate',
+    'VESSEL_NAME': 'vessel_name',
+    'OBSERVED_DISTANCE': 'observed_distance',
+    'EVENT': 'event'
 }
+
+# # Configuration
+# COLUMN_NAMES = {
+#     'SPEED': 'SPEED',
+#     'VESSEL_NAME': 'VESSEL_NAME',
+#     'EVENT': 'EVENT',
+#     'STEAMING_HOURS': 'STEAMING_TIME_HRS',
+#     'OBSERVED_DISTANCE': 'OBSERVERD_DISTANCE',
+#     'ME_RPM': 'MERPM',
+#     'ME_RUN_HOURS': 'ME_RUNNING_HOURS_DAILY',
+#     'ME_CONSUMPTION': 'ME_CONSUMPTION',
+#     'REPORT_DATE': 'REPORT_DATE'
+# }
 
 VALIDATION_THRESHOLDS = {
     'min_speed': 0,
@@ -107,7 +119,7 @@ def fetch_speed_data(date_filter):
     engine = get_db_engine()
     query = """
     SELECT *
-    FROM sf_consumption_logs
+    FROM vessel_performance_summary
     WHERE reportdate >= %s;
     """
     return pd.read_sql_query(query, engine, params=(date_filter,))
