@@ -114,14 +114,18 @@ def validate_speed(row, vessel_type_cache={}):
 
     print(f"Processing row: {row}")
 
-    speed = row[COLUMN_NAMES['SPEED']]
-    print(f"Speed: {speed}")
-    vessel_name = row[COLUMN_NAMES['VESSEL_NAME']]
-    print(f"Vessel Name: {vessel_name}")
-    vessel_status = row[COLUMN_NAMES['EVENT']]
-    print(f"Vessel Status: {vessel_status}")
-    # Continue with other values...
+    print("Debug: Entered validate_speed function")
+    print("Debug: Row data:", row)
+    print("Debug: Row columns:", row.index.tolist())
+    print("Debug: COLUMN_NAMES:", COLUMN_NAMES)
 
+    try:
+        speed = row[COLUMN_NAMES['SPEED']]
+        print(f"Debug: Speed value: {speed}")
+    except KeyError as e:
+        print(f"Debug: KeyError occurred: {e}")
+        print(f"Debug: Available columns: {row.index.tolist()}")
+        return ["Unable to validate speed due to missing data"]
     return failure_reasons
 
 
