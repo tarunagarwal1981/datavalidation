@@ -1,6 +1,7 @@
 import pandas as pd
 from database import get_db_engine
 
+
 # Configuration
 COLUMN_NAMES = {
     'SPEED': 'SPEED',
@@ -11,6 +12,7 @@ COLUMN_NAMES = {
     'ME_RPM': 'MERPM',
     'ME_RUN_HOURS': 'ME_RUNNING_HOURS_DAILY',
     'ME_CONSUMPTION': 'ME_CONSUMPTION'
+    'REPORT_DATE': 'REPORT_DATE',
 }
 
 VALIDATION_THRESHOLDS = {
