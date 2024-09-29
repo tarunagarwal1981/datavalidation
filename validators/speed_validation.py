@@ -112,7 +112,19 @@ def validate_speed(row, vessel_type_cache={}):
     else:
         failure_reasons.append("Speed data is missing")
 
+    print(f"Processing row: {row}")
+
+    speed = row[COLUMN_NAMES['SPEED']]
+    print(f"Speed: {speed}")
+    vessel_name = row[COLUMN_NAMES['VESSEL_NAME']]
+    print(f"Vessel Name: {vessel_name}")
+    vessel_status = row[COLUMN_NAMES['EVENT']]
+    print(f"Vessel Status: {vessel_status}")
+    # Continue with other values...
+
     return failure_reasons
+
+
 
 # Data fetching function (placeholder)
 def fetch_speed_data(date_filter):
