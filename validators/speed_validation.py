@@ -138,6 +138,11 @@ def fetch_speed_data(date_filter):
     FROM vessel_performance_summary
     WHERE reportdate >= %s;
     """
-    return pd.read_sql_query(query, engine, params=(date_filter,))
+    data = pd.read_sql_query(query, engine, params=(date_filter,))
+    print("Fetched Data: \n", data.head())  # Print first few rows of data
+    print("Columns: ", data.columns)  # Print the columns to check
+    return data
+    
+    #return pd.read_sql_query(query, engine, params=(date_filter,))
 
 
