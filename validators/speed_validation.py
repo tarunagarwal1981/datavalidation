@@ -4,7 +4,7 @@ from database import get_db_engine
 COLUMN_NAMES = {
     'ME_CONSUMPTION': 'actual_me_consumption',
     'ME_RPM': 'me_rpm',
-    #'STREAMING_HOURS': 'steaming_time_hrs',
+    'STEAMING_HOURS': 'steaming_time_hrs',
     'ME_RUN_HOURS': 'steaming_time_hrs',
     'SPEED': 'observed_speed',
     'DISPLACEMENT': 'displacement',
