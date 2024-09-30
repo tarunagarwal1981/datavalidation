@@ -6,6 +6,7 @@ from validators.ae_consumption_validation import validate_ae_consumption
 from validators.boiler_consumption_validation import validate_boiler_consumption, fetch_mcr_data
 from validators.distance_validation import validate_distance_data
 from validators.speed_validation import validate_speed, fetch_speed_data
+from validators.fuel_rob_validation import validate_fuel_rob_for_vessel, fetch_sf_consumption_logs
 
 st.set_page_config(layout="wide")
 
@@ -34,6 +35,7 @@ def main():
         boiler_consumption_check = st.sidebar.checkbox("Boiler Consumption", value=True, key="boiler_consumption_check")
         observed_distance_check = st.sidebar.checkbox("Observed Distance", value=True, key="observed_distance_check")
         speed_check = st.sidebar.checkbox("Speed", value=True, key="speed_check")
+        fuel_rob_check = st.sidebar.checkbox("Fuel ROB", value=True, key="fuel_rob_check")  # New: Fuel ROB checkbox
 
         max_vessels = st.sidebar.number_input("Maximum number of vessels to process (0 for all)", min_value=0, value=0, key="max_vessels")
         batch_size = st.sidebar.number_input("Batch size for distance validation", min_value=100, max_value=10000, value=1000, step=100, key="batch_size")
@@ -45,12 +47,12 @@ def main():
             try:
                 validation_results = []
 
-                if me_consumption_check or ae_consumption_check or boiler_consumption_check or speed_check:
+                if me_consumption_check or ae_consumption_check or boiler_consumption_check or speed_check or fuel_rob_check:
                     df = fetch_vessel_performance_data(date_filter)
                     coefficients_df = fetch_vessel_coefficients()
                     hull_performance_df = fetch_hull_performance_data()
                     mcr_df = fetch_mcr_data(date_filter)
-                    #speed_df = fetch_speed_data(date_filter)
+                    sf_consumption_logs = fetch_sf_consumption_logs(date_filter)  # New: Fetch sf_consumption_logs
                     
                     if not df.empty:
                         vessel_groups = list(df.groupby('vessel_name'))
@@ -90,6 +92,10 @@ def main():
                                 if speed_check:
                                     speed_failure_reasons = validate_speed(row, vessel_type_cache)
                                     failure_reasons.extend(speed_failure_reasons)
+                                
+                                if fuel_rob_check:
+                                    fuel_rob_failures = validate_fuel_rob_for_vessel(sf_consumption_logs, vessel_name)
+                                    failure_reasons.extend([failure['Remarks'] for failure in fuel_rob_failures if failure['Report Date'] == row['reportdate']])
                                 
                                 if failure_reasons:
                                     validation_results.append({
@@ -152,6 +158,19 @@ def main():
         5. High speed for vessel type: Flags if speed exceeds maximum for container or non-container vessels.<br>
         6. Speed-distance-time alignment: Compares observed speed with calculated speed based on distance and time.<br>
         7. Consistency check: Flags if speed is positive but engine parameters indicate no movement.
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("<h3 style='font-size: 14px;'>Fuel ROB Validations</h3>", unsafe_allow_html=True)
+        st.markdown("""
+        <div style='font-size: 10px;'>
+        1. HSFO ROB: Validates High-Sulfur Fuel Oil Remaining On Board.<br>
+        2. LSMGO ROB: Validates Low-Sulfur Marine Gas Oil Remaining On Board.<br>
+        3. ULSFO ROB: Validates Ultra-Low-Sulfur Fuel Oil Remaining On Board.<br>
+        4. VLSFO ROB: Validates Very Low-Sulfur Fuel Oil Remaining On Board.<br>
+        5. MDO ROB: Validates Marine Diesel Oil Remaining On Board.<br>
+        6. LNG ROB: Validates Liquefied Natural Gas Remaining On Board.<br>
+        Each validation checks if the current ROB matches the calculated value based on previous ROB, bunkered quantity, and total consumption.
         </div>
         """, unsafe_allow_html=True)
 
