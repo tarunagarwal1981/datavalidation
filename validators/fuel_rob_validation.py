@@ -60,18 +60,18 @@ def validate_fuel_rob_batch(df):
             if fuel_type == 'ULSFO':
                 current_rob = current_row[COLUMN_NAMES[f'ROB_{fuel_type}']]
                 prev_rob = previous_row[COLUMN_NAMES[f'ROB_{fuel_type}']]
-                bunkered_qty = current_row[COLUMN_NAMES['BUNKERED_QTY_VLSFO']]
-                total_consumption = current_row[COLUMN_NAMES['TOTAL_CONSUMPTION_MDO']]
+                bunkered_qty = current_row[COLUMN_NAMES['BUNKERED_QTY_ULSFO']]
+                total_consumption = current_row[COLUMN_NAMES['TOTAL_CONSUMPTION_ULSFO']]
             elif fuel_type == 'VLSFO':
                 current_rob = current_row[COLUMN_NAMES[f'ROB_{fuel_type}']]
                 prev_rob = previous_row[COLUMN_NAMES[f'ROB_{fuel_type}']]
-                bunkered_qty = current_row[COLUMN_NAMES['BUNKERED_QTY_ULSFO']]
-                total_consumption = current_row[COLUMN_NAMES['TOTAL_CONSUMPTION_ULSFO']]
+                bunkered_qty = current_row[COLUMN_NAMES['BUNKERED_QTY_VLSFO']]
+                total_consumption = current_row[COLUMN_NAMES['TOTAL_CONSUMPTION_VLSFO']]
             elif fuel_type == 'MDO':
                 current_rob = current_row[COLUMN_NAMES[f'ROB_{fuel_type}']]
                 prev_rob = previous_row[COLUMN_NAMES[f'ROB_{fuel_type}']]
                 bunkered_qty = current_row[COLUMN_NAMES['BUNKERED_QTY_MDO']]
-                total_consumption = current_row[COLUMN_NAMES['TOTAL_CONSUMPTION_VLSFO']]
+                total_consumption = current_row[COLUMN_NAMES['TOTAL_CONSUMPTION_MDO']]
             else:
                 current_rob = current_row[COLUMN_NAMES[f'ROB_{fuel_type}']]
                 prev_rob = previous_row[COLUMN_NAMES[f'ROB_{fuel_type}']]
