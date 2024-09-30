@@ -29,7 +29,7 @@ COLUMN_NAMES = {
 }
 
 VALIDATION_THRESHOLDS = {
-    'rob_tolerance': 1e-5
+    'rob_tolerance': 0  # Set to zero as requested
 }
 
 @st.cache_data
@@ -42,7 +42,9 @@ def fetch_sf_consumption_logs(date_filter):
         WHERE "{COLUMN_NAMES['REPORT_DATE']}" >= %s
         ORDER BY "{COLUMN_NAMES['VESSEL_NAME']}", "{COLUMN_NAMES['REPORT_DATE']}"
         """
-        return pd.read_sql_query(query, engine, params=(date_filter,))
+        df = pd.read_sql_query(query, engine, params=(date_filter,))
+        # Replace null values with 0
+        return df.fillna(0)
     except SQLAlchemyError as e:
         st.error(f"Error fetching sf_consumption_logs data: {str(e)}")
         return pd.DataFrame()
@@ -57,30 +59,14 @@ def validate_fuel_rob_batch(df):
         previous_row = df.iloc[i-1]
 
         for fuel_type in fuel_types:
-            if fuel_type == 'ULSFO':
-                current_rob = current_row[COLUMN_NAMES[f'ROB_{fuel_type}']]
-                prev_rob = previous_row[COLUMN_NAMES[f'ROB_{fuel_type}']]
-                bunkered_qty = current_row[COLUMN_NAMES['BUNKERED_QTY_ULSFO']]
-                total_consumption = current_row[COLUMN_NAMES['TOTAL_CONSUMPTION_ULSFO']]
-            elif fuel_type == 'VLSFO':
-                current_rob = current_row[COLUMN_NAMES[f'ROB_{fuel_type}']]
-                prev_rob = previous_row[COLUMN_NAMES[f'ROB_{fuel_type}']]
-                bunkered_qty = current_row[COLUMN_NAMES['BUNKERED_QTY_VLSFO']]
-                total_consumption = current_row[COLUMN_NAMES['TOTAL_CONSUMPTION_VLSFO']]
-            elif fuel_type == 'MDO':
-                current_rob = current_row[COLUMN_NAMES[f'ROB_{fuel_type}']]
-                prev_rob = previous_row[COLUMN_NAMES[f'ROB_{fuel_type}']]
-                bunkered_qty = current_row[COLUMN_NAMES['BUNKERED_QTY_MDO']]
-                total_consumption = current_row[COLUMN_NAMES['TOTAL_CONSUMPTION_MDO']]
-            else:
-                current_rob = current_row[COLUMN_NAMES[f'ROB_{fuel_type}']]
-                prev_rob = previous_row[COLUMN_NAMES[f'ROB_{fuel_type}']]
-                bunkered_qty = current_row[COLUMN_NAMES[f'BUNKERED_QTY_{fuel_type}']]
-                total_consumption = current_row[COLUMN_NAMES[f'TOTAL_CONSUMPTION_{fuel_type}']]
+            current_rob = current_row[COLUMN_NAMES[f'ROB_{fuel_type}']]
+            prev_rob = previous_row[COLUMN_NAMES[f'ROB_{fuel_type}']]
+            bunkered_qty = current_row[COLUMN_NAMES[f'BUNKERED_QTY_{fuel_type}']]
+            total_consumption = current_row[COLUMN_NAMES[f'TOTAL_CONSUMPTION_{fuel_type}']]
 
             calculated_rob = prev_rob + bunkered_qty - total_consumption
 
-            if not np.isclose(current_rob, calculated_rob, rtol=VALIDATION_THRESHOLDS['rob_tolerance'], atol=VALIDATION_THRESHOLDS['rob_tolerance']):
+            if calculated_rob != current_rob:  # Direct comparison as tolerance is zero
                 failure_reasons.append({
                     'Vessel Name': current_row[COLUMN_NAMES['VESSEL_NAME']],
                     'Report Date': current_row[COLUMN_NAMES['REPORT_DATE']],
