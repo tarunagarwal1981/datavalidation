@@ -1,5 +1,4 @@
 import pandas as pd
-import numpy as np
 from database import get_db_engine
 from sqlalchemy.exc import SQLAlchemyError
 import streamlit as st
@@ -28,9 +27,7 @@ COLUMN_NAMES = {
     'TOTAL_CONSUMPTION_LNG': 'TOTAL_CONSUMPTION_LNG'
 }
 
-VALIDATION_THRESHOLDS = {
-    'rob_tolerance': 0  # Set to zero as requested
-}
+FUEL_TYPES = ['HSFO', 'LSMGO', 'ULSFO', 'VLSFO', 'MDO', 'LNG']
 
 @st.cache_data
 def fetch_sf_consumption_logs(date_filter):
@@ -43,30 +40,38 @@ def fetch_sf_consumption_logs(date_filter):
         ORDER BY "{COLUMN_NAMES['VESSEL_NAME']}", "{COLUMN_NAMES['REPORT_DATE']}"
         """
         df = pd.read_sql_query(query, engine, params=(date_filter,))
-        # Replace null values with 0
-        return df.fillna(0)
+        # Replace null values with 0 for numeric columns
+        numeric_columns = [col for col in df.columns if df[col].dtype in ['float64', 'int64']]
+        df[numeric_columns] = df[numeric_columns].fillna(0)
+        return df
     except SQLAlchemyError as e:
         st.error(f"Error fetching sf_consumption_logs data: {str(e)}")
         return pd.DataFrame()
 
+def safe_float(value):
+    """Convert value to float, returning 0 if conversion fails."""
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return 0.0
+
 def validate_fuel_rob_batch(df):
     failure_reasons = []
-    
-    fuel_types = ['HSFO', 'LSMGO', 'ULSFO', 'VLSFO', 'MDO', 'LNG']
 
     for i in range(1, len(df)):
         current_row = df.iloc[i]
         previous_row = df.iloc[i-1]
 
-        for fuel_type in fuel_types:
-            current_rob = current_row[COLUMN_NAMES[f'ROB_{fuel_type}']]
-            prev_rob = previous_row[COLUMN_NAMES[f'ROB_{fuel_type}']]
-            bunkered_qty = current_row[COLUMN_NAMES[f'BUNKERED_QTY_{fuel_type}']]
-            total_consumption = current_row[COLUMN_NAMES[f'TOTAL_CONSUMPTION_{fuel_type}']]
+        for fuel_type in FUEL_TYPES:
+            current_rob = safe_float(current_row[COLUMN_NAMES[f'ROB_{fuel_type}']])
+            prev_rob = safe_float(previous_row[COLUMN_NAMES[f'ROB_{fuel_type}']])
+            bunkered_qty = safe_float(current_row[COLUMN_NAMES[f'BUNKERED_QTY_{fuel_type}']])
+            total_consumption = safe_float(current_row[COLUMN_NAMES[f'TOTAL_CONSUMPTION_{fuel_type}']])
 
-            calculated_rob = prev_rob + bunkered_qty - total_consumption
+            calculated_rob = round(prev_rob + bunkered_qty - total_consumption, 2)
+            current_rob = round(current_rob, 2)
 
-            if calculated_rob != current_rob:  # Direct comparison as tolerance is zero
+            if calculated_rob != current_rob:
                 failure_reasons.append({
                     'Vessel Name': current_row[COLUMN_NAMES['VESSEL_NAME']],
                     'Report Date': current_row[COLUMN_NAMES['REPORT_DATE']],
