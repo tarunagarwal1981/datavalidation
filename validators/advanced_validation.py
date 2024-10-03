@@ -6,7 +6,10 @@ from sklearn.preprocessing import RobustScaler
 from scipy.stats import ks_2samp, chisquare
 import ruptures as rpt
 from sklearn.feature_selection import mutual_info_regression, mutual_info_classif
+from database import get_db_engine  # Import the function from database.py
 
+# Function: load_data
+# Purpose: Retrieve the last 6 months of data for a specific vessel from the database
 def load_data(engine, vessel_name):
     query = f"""
     SELECT * FROM sf_consumption_log
@@ -18,6 +21,8 @@ def load_data(engine, vessel_name):
     df['REPORT_DATE'] = pd.to_datetime(df['REPORT_DATE'])
     return df
 
+# Function: preprocess_data
+# Purpose: Prepare the data for analysis by encoding categorical variables and scaling numeric features
 def preprocess_data(df):
     # Handling missing values
     df.fillna(df.median(), inplace=True)
@@ -34,6 +39,8 @@ def preprocess_data(df):
     
     return df
 
+# Function: detect_anomalies
+# Purpose: Identify anomalies in the dataset using an ensemble approach with LOF and Isolation Forest
 def detect_anomalies(df):
     features = ['ME_CONSUMPTION', 'OBSERVERD_DISTANCE', 'SPEED', 'DISPLACEMENT', 
                 'STEAMING_TIME_HRS', 'WINDFORCE', 'VESSEL_ACTIVITY', 'LOAD_TYPE']
@@ -57,6 +64,8 @@ def detect_anomalies(df):
     
     return anomalies
 
+# Function: detect_drift
+# Purpose: Detect distributional changes between training and test datasets
 def detect_drift(train_df, test_df):
     continuous_features = ['ME_CONSUMPTION', 'OBSERVERD_DISTANCE', 'SPEED', 'DISPLACEMENT', 
                            'STEAMING_TIME_HRS', 'WINDFORCE']
@@ -76,6 +85,8 @@ def detect_drift(train_df, test_df):
     
     return drift_detected
 
+# Function: detect_change_points
+# Purpose: Identify points in time series data where statistical properties change
 def detect_change_points(df):
     features = ['ME_CONSUMPTION', 'OBSERVERD_DISTANCE', 'SPEED']
     change_points = {}
@@ -87,6 +98,8 @@ def detect_change_points(df):
     
     return change_points
 
+# Function: validate_relationships
+# Purpose: Assess the strength of relationships between features using mutual information
 def validate_relationships(df):
     # Mutual information for continuous variables
     continuous_features = ['ME_CONSUMPTION', 'SPEED', 'DISPLACEMENT', 'STEAMING_TIME_HRS']
@@ -105,6 +118,8 @@ def validate_relationships(df):
     
     return relationships
 
+# Function: run_advanced_validation
+# Purpose: Orchestrate the entire advanced validation process
 def run_advanced_validation(engine, vessel_name):
     df = load_data(engine, vessel_name)
     df_processed = preprocess_data(df)
