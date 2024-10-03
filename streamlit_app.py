@@ -7,6 +7,7 @@ from validators.boiler_consumption_validation import validate_boiler_consumption
 from validators.distance_validation import validate_distance_data
 from validators.speed_validation import validate_speed, fetch_speed_data
 from validators.fuel_rob_validation import validate_fuel_rob_for_vessel, fetch_sf_consumption_logs
+from advanced_validation import run_advanced_validation
 
 st.set_page_config(layout="wide")
 
@@ -35,7 +36,10 @@ def main():
         boiler_consumption_check = st.sidebar.checkbox("Boiler Consumption", value=True, key="boiler_consumption_check")
         observed_distance_check = st.sidebar.checkbox("Observed Distance", value=True, key="observed_distance_check")
         speed_check = st.sidebar.checkbox("Speed", value=True, key="speed_check")
-        fuel_rob_check = st.sidebar.checkbox("Fuel ROB", value=True, key="fuel_rob_check")  # New: Fuel ROB checkbox
+        fuel_rob_check = st.sidebar.checkbox("Fuel ROB", value=True, key="fuel_rob_check")
+
+        # New: Advanced Validation checkbox
+        advanced_validation_check = st.sidebar.checkbox("Run Advanced Validations", value=False, key="advanced_validation_check")
 
         max_vessels = st.sidebar.number_input("Maximum number of vessels to process (0 for all)", min_value=0, value=0, key="max_vessels")
         batch_size = st.sidebar.number_input("Batch size for distance validation", min_value=100, max_value=10000, value=1000, step=100, key="batch_size")
@@ -52,7 +56,7 @@ def main():
                     coefficients_df = fetch_vessel_coefficients()
                     hull_performance_df = fetch_hull_performance_data()
                     mcr_df = fetch_mcr_data(date_filter)
-                    sf_consumption_logs = fetch_sf_consumption_logs(date_filter)  # New: Fetch sf_consumption_logs
+                    sf_consumption_logs = fetch_sf_consumption_logs(date_filter)
                     
                     if not df.empty:
                         vessel_groups = list(df.groupby('vessel_name'))
@@ -126,6 +130,30 @@ def main():
                     st.download_button(label="Download validation report as CSV", data=csv, file_name='validation_report.csv', mime='text/csv', key="download_button")
                 else:
                     st.write("All data passed the validation checks!")
+
+                # New: Run Advanced Validations
+                if advanced_validation_check:
+                    st.write("Running Advanced Validations...")
+                    engine = get_db_engine()  # Ensure this function is defined or imported
+                    for vessel_name in df['vessel_name'].unique():
+                        advanced_results = run_advanced_validation(engine, vessel_name)
+                        
+                        st.write(f"Advanced Validation Results for {vessel_name}:")
+                        st.write(f"Anomalies detected: {len(advanced_results['anomalies'])}")
+                        st.write("Drift detected in features:", ", ".join([f for f, d in advanced_results['drift'].items() if d]))
+                        
+                        st.write("Change points detected:")
+                        for feature, points in advanced_results['change_points'].items():
+                            st.write(f"  {feature}: {points}")
+                        
+                        st.write("Feature relationships (Mutual Information):")
+                        for feature, mi in advanced_results['relationships'].items():
+                            st.write(f"  {feature}: {mi:.4f}")
+
+                        st.write("---")  # Separator between vessels
+
+                if advanced_validation_check and st.button('Retrain Models'):
+                    st.write("Retraining models... (implement retraining logic here)")
             
             except Exception as e:
                 st.error(f"An error occurred: {str(e)}")
@@ -171,6 +199,17 @@ def main():
         5. MDO ROB: Validates Marine Diesel Oil Remaining On Board.<br>
         6. LNG ROB: Validates Liquefied Natural Gas Remaining On Board.<br>
         Each validation checks if the current ROB matches the calculated value based on previous ROB, bunkered quantity, and total consumption.
+        </div>
+        """, unsafe_allow_html=True)
+
+        # New: Advanced Validations description
+        st.markdown("<h3 style='font-size: 14px;'>Advanced Validations</h3>", unsafe_allow_html=True)
+        st.markdown("""
+        <div style='font-size: 10px;'>
+        1. Anomaly Detection: Uses ensemble of Isolation Forest and Local Outlier Factor to detect unusual data points.<br>
+        2. Drift Detection: Identifies significant changes in data distribution over time.<br>
+        3. Change Point Detection: Detects abrupt changes in time series data.<br>
+        4. Feature Relationship Analysis: Measures mutual information between features to understand complex dependencies.
         </div>
         """, unsafe_allow_html=True)
 
