@@ -175,12 +175,14 @@ def run_advanced_validation(engine, vessel_name, date_filter):
 # Example of how to use the advanced validation functionality
 if __name__ == "__main__":
     from datetime import datetime, timedelta
-    
+    from database import get_db_engine  # Import the function to get the engine
+
+    engine = get_db_engine()  # Get the database engine
     date_filter = datetime.now() - timedelta(days=180)  # Last 6 months
     vessel_name = "Example_Vessel"  # Replace with actual vessel name
-    
+
     try:
-        results = run_advanced_validation(vessel_name, date_filter)
+        results = run_advanced_validation(engine, vessel_name, date_filter)  # Pass engine as first argument
         print(pd.DataFrame(results))
     except ValueError as e:
         print(str(e))
