@@ -1,18 +1,118 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 from datetime import datetime, timedelta
+from sklearn.ensemble import IsolationForest
+from sklearn.neighbors import LocalOutlierFactor
+from sklearn.preprocessing import RobustScaler
+from scipy.stats import ks_2samp, chisquare
+import ruptures as rpt
+from sklearn.feature_selection import mutual_info_regression, mutual_info_classif
+
 from validators.me_consumption_validation import validate_me_consumption, fetch_vessel_performance_data, fetch_vessel_coefficients, fetch_hull_performance_data
 from validators.ae_consumption_validation import validate_ae_consumption
 from validators.boiler_consumption_validation import validate_boiler_consumption, fetch_mcr_data
 from validators.distance_validation import validate_distance_data
 from validators.speed_validation import validate_speed, fetch_speed_data
 from validators.fuel_rob_validation import validate_fuel_rob_for_vessel, fetch_sf_consumption_logs
-from advanced_validation import run_advanced_validation
 
 st.set_page_config(layout="wide")
 
+# Advanced Validation Functions
+def preprocess_data(df):
+    df.fillna(df.median(), inplace=True)
+    
+    df['VESSEL_ACTIVITY'] = pd.Categorical(df['VESSEL_ACTIVITY']).codes
+    df['LOAD_TYPE'] = pd.Categorical(df['LOAD_TYPE']).codes
+    
+    numeric_columns = ['ME_CONSUMPTION', 'OBSERVERD_DISTANCE', 'SPEED', 'DISPLACEMENT', 
+                       'STEAMING_TIME_HRS', 'WINDFORCE']
+    scaler = RobustScaler()
+    df[numeric_columns] = scaler.fit_transform(df[numeric_columns])
+    
+    return df
+
+def detect_anomalies(df):
+    features = ['ME_CONSUMPTION', 'OBSERVERD_DISTANCE', 'SPEED', 'DISPLACEMENT', 
+                'STEAMING_TIME_HRS', 'WINDFORCE', 'VESSEL_ACTIVITY', 'LOAD_TYPE']
+    
+    scaled_features = RobustScaler().fit_transform(df[features])
+    
+    historical_anomaly_rate = 0.05
+    contamination = max(0.01, min(historical_anomaly_rate, 0.1))
+    
+    lof = LocalOutlierFactor(n_neighbors=20, contamination=contamination)
+    iso_forest = IsolationForest(contamination=contamination, random_state=42)
+    
+    lof_anomalies = lof.fit_predict(scaled_features)
+    iso_forest_anomalies = iso_forest.fit_predict(scaled_features)
+    
+    combined_anomalies = (lof_anomalies == -1).astype(int) + (iso_forest_anomalies == -1).astype(int)
+    anomalies = df[combined_anomalies > 1]
+    
+    return anomalies
+
+def detect_drift(train_df, test_df):
+    continuous_features = ['ME_CONSUMPTION', 'OBSERVERD_DISTANCE', 'SPEED', 'DISPLACEMENT', 
+                           'STEAMING_TIME_HRS', 'WINDFORCE']
+    categorical_features = ['VESSEL_ACTIVITY', 'LOAD_TYPE']
+    
+    drift_detected = {}
+    
+    for feature in continuous_features:
+        ks_stat, p_value = ks_2samp(train_df[feature], test_df[feature])
+        drift_detected[feature] = p_value < 0.05
+
+    for feature in categorical_features:
+        chi_stat, p_value = chisquare(train_df[feature].value_counts(), test_df[feature].value_counts())
+        drift_detected[feature] = p_value < 0.05
+    
+    return drift_detected
+
+def detect_change_points(df):
+    features = ['ME_CONSUMPTION', 'OBSERVERD_DISTANCE', 'SPEED']
+    change_points = {}
+    
+    for feature in features:
+        algo = rpt.Pelt(model="rbf").fit(df[feature].values)
+        penalty = np.std(df[feature].values)
+        change_points[feature] = algo.predict(pen=penalty)
+    
+    return change_points
+
+def validate_relationships(df):
+    continuous_features = ['ME_CONSUMPTION', 'SPEED', 'DISPLACEMENT', 'STEAMING_TIME_HRS']
+    mutual_info = mutual_info_regression(df[continuous_features], df['ME_CONSUMPTION'])
+    
+    relationships = {}
+    for i, feature in enumerate(continuous_features[1:]):
+        relationships[feature] = mutual_info[i]
+    
+    categorical_features = ['VESSEL_ACTIVITY', 'LOAD_TYPE']
+    cat_mutual_info = mutual_info_classif(df[categorical_features], df['ME_CONSUMPTION'])
+    
+    for i, feature in enumerate(categorical_features):
+        relationships[feature] = cat_mutual_info[i]
+    
+    return relationships
+
+def run_advanced_validation(df, vessel_name):
+    df_vessel = df[df['vessel_name'] == vessel_name]
+    df_processed = preprocess_data(df_vessel)
+    
+    train_df = df_processed[df_processed['REPORT_DATE'] < df_processed['REPORT_DATE'].max() - pd.Timedelta(days=90)]
+    test_df = df_processed[df_processed['REPORT_DATE'] >= df_processed['REPORT_DATE'].max() - pd.Timedelta(days=90)]
+    
+    results = {
+        'anomalies': detect_anomalies(test_df),
+        'drift': detect_drift(train_df, test_df),
+        'change_points': detect_change_points(test_df),
+        'relationships': validate_relationships(test_df)
+    }
+    
+    return results
+
 def main():
-    # Create columns for main content and right sidebar
     main_content, right_sidebar = st.columns([3, 1])
 
     with st.sidebar:
@@ -38,7 +138,6 @@ def main():
         speed_check = st.sidebar.checkbox("Speed", value=True, key="speed_check")
         fuel_rob_check = st.sidebar.checkbox("Fuel ROB", value=True, key="fuel_rob_check")
 
-        # New: Advanced Validation checkbox
         advanced_validation_check = st.sidebar.checkbox("Run Advanced Validations", value=False, key="advanced_validation_check")
 
         max_vessels = st.sidebar.number_input("Maximum number of vessels to process (0 for all)", min_value=0, value=0, key="max_vessels")
@@ -51,7 +150,7 @@ def main():
             try:
                 validation_results = []
 
-                if me_consumption_check or ae_consumption_check or boiler_consumption_check or speed_check or fuel_rob_check:
+                if me_consumption_check or ae_consumption_check or boiler_consumption_check or speed_check or fuel_rob_check or advanced_validation_check:
                     df = fetch_vessel_performance_data(date_filter)
                     coefficients_df = fetch_vessel_coefficients()
                     hull_performance_df = fetch_hull_performance_data()
@@ -108,6 +207,19 @@ def main():
                                         'Remarks': ", ".join(failure_reasons)
                                     })
                             
+                            if advanced_validation_check:
+                                advanced_results = run_advanced_validation(df, vessel_name)
+                                st.write(f"Advanced Validation Results for {vessel_name}:")
+                                st.write(f"Anomalies detected: {len(advanced_results['anomalies'])}")
+                                st.write("Drift detected in features:", ", ".join([f for f, d in advanced_results['drift'].items() if d]))
+                                st.write("Change points detected:")
+                                for feature, points in advanced_results['change_points'].items():
+                                    st.write(f"  {feature}: {points}")
+                                st.write("Feature relationships (Mutual Information):")
+                                for feature, mi in advanced_results['relationships'].items():
+                                    st.write(f"  {feature}: {mi:.4f}")
+                                st.write("---")
+                            
                             progress = (i + 1) / len(vessel_groups)
                             progress_bar.progress(progress)
                             progress_text.text(f"Validating: {progress:.0%}")
@@ -130,27 +242,6 @@ def main():
                     st.download_button(label="Download validation report as CSV", data=csv, file_name='validation_report.csv', mime='text/csv', key="download_button")
                 else:
                     st.write("All data passed the validation checks!")
-
-                # New: Run Advanced Validations
-                if advanced_validation_check:
-                    st.write("Running Advanced Validations...")
-                    engine = get_db_engine()  # Ensure this function is defined or imported
-                    for vessel_name in df['vessel_name'].unique():
-                        advanced_results = run_advanced_validation(engine, vessel_name)
-                        
-                        st.write(f"Advanced Validation Results for {vessel_name}:")
-                        st.write(f"Anomalies detected: {len(advanced_results['anomalies'])}")
-                        st.write("Drift detected in features:", ", ".join([f for f, d in advanced_results['drift'].items() if d]))
-                        
-                        st.write("Change points detected:")
-                        for feature, points in advanced_results['change_points'].items():
-                            st.write(f"  {feature}: {points}")
-                        
-                        st.write("Feature relationships (Mutual Information):")
-                        for feature, mi in advanced_results['relationships'].items():
-                            st.write(f"  {feature}: {mi:.4f}")
-
-                        st.write("---")  # Separator between vessels
 
                 if advanced_validation_check and st.button('Retrain Models'):
                     st.write("Retraining models... (implement retraining logic here)")
@@ -202,7 +293,6 @@ def main():
         </div>
         """, unsafe_allow_html=True)
 
-        # New: Advanced Validations description
         st.markdown("<h3 style='font-size: 14px;'>Advanced Validations</h3>", unsafe_allow_html=True)
         st.markdown("""
         <div style='font-size: 10px;'>
