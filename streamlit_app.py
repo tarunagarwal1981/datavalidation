@@ -111,26 +111,26 @@ def main():
                                     })
                             
                             # New: Advanced Validation
-                            if advanced_validation_check:
-                            advanced_results = run_advanced_validation(engine, vessel_name, date_filter)
+                  if advanced_validation_check:
+                        advanced_results = run_advanced_validation(engine, vessel_name, date_filter)
                             
-                            st.write(f"Advanced Validation Results for {vessel_name}:")
-                            st.write(f"Anomalies detected: {len(advanced_results['anomalies'])}")
-                            st.write("Drift detected in features:", ", ".join([f for f, d in advanced_results['drift'].items() if d]))
+                        st.write(f"Advanced Validation Results for {vessel_name}:")
+                        st.write(f"Anomalies detected: {len(advanced_results['anomalies'])}")
+                        st.write("Drift detected in features:", ", ".join([f for f, d in advanced_results['drift'].items() if d]))
                             
-                            st.write("Change points detected:")
-                            for feature, points in advanced_results['change_points'].items():
-                                st.write(f"  {feature}: {points}")
+                        st.write("Change points detected:")
+                        for feature, points in advanced_results['change_points'].items():
+                            st.write(f"  {feature}: {points}")
                             
-                            st.write("Feature relationships (Mutual Information):")
-                            for feature, mi in advanced_results['relationships'].items():
-                                st.write(f"  {feature}: {mi:.4f}")
+                        st.write("Feature relationships (Mutual Information):")
+                        for feature, mi in advanced_results['relationships'].items():
+                            st.write(f"  {feature}: {mi:.4f}")
 
-                            st.write("---")
+                        st.write("---") 
                             
-                            progress = (i + 1) / len(vessel_groups)
-                            progress_bar.progress(progress)
-                            progress_text.text(f"Validating: {progress:.0%}")
+                        progress = (i + 1) / len(vessel_groups)
+                        progress_bar.progress(progress)
+                        progress_text.text(f"Validating: {progress:.0%}")
                         
                         progress_bar.empty()
                         progress_text.empty()
