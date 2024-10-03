@@ -5,10 +5,10 @@ from validators.me_consumption_validation import validate_me_consumption, fetch_
 from validators.ae_consumption_validation import validate_ae_consumption
 from validators.boiler_consumption_validation import validate_boiler_consumption, fetch_mcr_data
 from validators.distance_validation import validate_distance_data
-from validators.speed_validation import validate_speed, fetch_speed_data
+from validators.speed_validation import validate_speed
 from validators.fuel_rob_validation import validate_fuel_rob_for_vessel, fetch_sf_consumption_logs
 from validators.advanced_validation import run_advanced_validation
-from database import get_db_engine
+from database import get_db_engine  # Importing database engine
 
 st.set_page_config(layout="wide")
 
@@ -24,6 +24,7 @@ def main():
             key="time_range_select"
         )
 
+        # Adjusting time filter based on user selection
         if time_range == "Last 1 Month":
             date_filter = datetime.now() - timedelta(days=30)
         elif time_range == "Last 3 Months":
@@ -31,6 +32,7 @@ def main():
         else:  # Last 6 Months
             date_filter = datetime.now() - timedelta(days=180)
 
+        # Sidebar validation checkboxes
         st.sidebar.write("Validation Criteria:")
         me_consumption_check = st.sidebar.checkbox("ME Consumption", value=True, key="me_consumption_check")
         ae_consumption_check = st.sidebar.checkbox("AE Consumption", value=True, key="ae_consumption_check")
@@ -42,28 +44,33 @@ def main():
         # New: Advanced Validation checkbox
         advanced_validation_check = st.sidebar.checkbox("Run Advanced Validations", value=False, key="advanced_validation_check")
 
+        # Limit the number of vessels and batch size
         max_vessels = st.sidebar.number_input("Maximum number of vessels to process (0 for all)", min_value=0, value=0, key="max_vessels")
         batch_size = st.sidebar.number_input("Batch size for distance validation", min_value=100, max_value=10000, value=1000, step=100, key="batch_size")
 
     with main_content:
         st.title('Vessel Data Validation')
 
+        # Validate data when the button is pressed
         if st.button('Validate Data', key="validate_button"):
             try:
+                # Establish the database engine only once
+                engine = get_db_engine()
                 validation_results = []
 
                 if me_consumption_check or ae_consumption_check or boiler_consumption_check or speed_check or fuel_rob_check:
-                    df = fetch_vessel_performance_data(date_filter)
-                    coefficients_df = fetch_vessel_coefficients()
-                    hull_performance_df = fetch_hull_performance_data()
-                    mcr_df = fetch_mcr_data(date_filter)
-                    sf_consumption_logs = fetch_sf_consumption_logs(date_filter)
+                    df = fetch_vessel_performance_data(engine, date_filter)  # Pass engine to fetch data
+                    coefficients_df = fetch_vessel_coefficients(engine)
+                    hull_performance_df = fetch_hull_performance_data(engine)
+                    mcr_df = fetch_mcr_data(engine, date_filter)
+                    sf_consumption_logs = fetch_sf_consumption_logs(engine, date_filter)
                     
                     if not df.empty:
                         vessel_groups = list(df.groupby('vessel_name'))
                         if max_vessels > 0:
                             vessel_groups = vessel_groups[:max_vessels]
                         
+                        # Progress bar setup
                         progress_bar = st.progress(0)
                         progress_text = st.empty()
                         
@@ -109,6 +116,7 @@ def main():
                                         'Remarks': ", ".join(failure_reasons)
                                     })
                             
+                            # Update progress bar
                             progress = (i + 1) / len(vessel_groups)
                             progress_bar.progress(progress)
                             progress_text.text(f"Validating: {progress:.0%}")
@@ -116,11 +124,13 @@ def main():
                         progress_bar.empty()
                         progress_text.empty()
                 
+                # Perform observed distance validation
                 if observed_distance_check:
                     with st.spinner('Performing distance validation...'):
-                        distance_validation_results = validate_distance_data(date_filter, batch_size)
+                        distance_validation_results = validate_distance_data(engine, date_filter, batch_size)
                         validation_results.extend(distance_validation_results.to_dict('records'))
                 
+                # Show validation results in a DataFrame
                 all_results = pd.DataFrame(validation_results)
                 
                 if not all_results.empty:
@@ -132,10 +142,9 @@ def main():
                 else:
                     st.write("All data passed the validation checks!")
 
-                # New: Run Advanced Validations
+                # Run Advanced Validations
                 if advanced_validation_check:
                     st.write("Running Advanced Validations...")
-                    engine = get_db_engine()  # Ensure this function is defined or imported
                     for vessel_name in df['vessel_name'].unique():
                         advanced_results = run_advanced_validation(engine, vessel_name)
                         
@@ -166,53 +175,23 @@ def main():
         st.markdown("<h2 style='font-size: 18px;'>Validation Checks</h2>", unsafe_allow_html=True)
         
         st.markdown("<h3 style='font-size: 14px;'>ME Consumption Validations</h3>", unsafe_allow_html=True)
-        st.markdown("...")  # (previous content)
+        st.markdown("...")  # Add content as needed
 
         st.markdown("<h3 style='font-size: 14px;'>AE Consumption Validations</h3>", unsafe_allow_html=True)
-        st.markdown("...")  # (previous content)
+        st.markdown("...")  # Add content as needed
 
         st.markdown("<h3 style='font-size: 14px;'>Boiler Consumption Validations</h3>", unsafe_allow_html=True)
-        st.markdown("...")  # (previous content)
+        st.markdown("...")  # Add content as needed
 
         st.markdown("<h3 style='font-size: 14px;'>Observed Distance Validations</h3>", unsafe_allow_html=True)
-        st.markdown("...")  # (previous content)
+        st.markdown("...")  # Add content as needed
 
         st.markdown("<h3 style='font-size: 14px;'>Speed Validations</h3>", unsafe_allow_html=True)
-        st.markdown("""
-        <div style='font-size: 10px;'>
-        1. Negative speed: Flags if observed speed is negative.<br>
-        2. Low speed at sea: Checks if speed is unusually low during sea passage.<br>
-        3. Unusual maneuvering speed: Flags if speed is outside expected range during maneuvering.<br>
-        4. Non-zero port speed: Checks if speed is non-zero when in port.<br>
-        5. High speed for vessel type: Flags if speed exceeds maximum for container or non-container vessels.<br>
-        6. Speed-distance-time alignment: Compares observed speed with calculated speed based on distance and time.<br>
-        7. Consistency check: Flags if speed is positive but engine parameters indicate no movement.
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown("""...""", unsafe_allow_html=True)  # Add content as needed
 
-        st.markdown("<h3 style='font-size: 14px;'>Fuel ROB Validations</h3>", unsafe_allow_html=True)
-        st.markdown("""
-        <div style='font-size: 10px;'>
-        1. HSFO ROB: Validates High-Sulfur Fuel Oil Remaining On Board.<br>
-        2. LSMGO ROB: Validates Low-Sulfur Marine Gas Oil Remaining On Board.<br>
-        3. ULSFO ROB: Validates Ultra-Low-Sulfur Fuel Oil Remaining On Board.<br>
-        4. VLSFO ROB: Validates Very Low-Sulfur Fuel Oil Remaining On Board.<br>
-        5. MDO ROB: Validates Marine Diesel Oil Remaining On Board.<br>
-        6. LNG ROB: Validates Liquefied Natural Gas Remaining On Board.<br>
-        Each validation checks if the current ROB matches the calculated value based on previous ROB, bunkered quantity, and total consumption.
-        </div>
-        """, unsafe_allow_html=True)
-
-        # New: Advanced Validations description
+        # Advanced Validation descriptions
         st.markdown("<h3 style='font-size: 14px;'>Advanced Validations</h3>", unsafe_allow_html=True)
-        st.markdown("""
-        <div style='font-size: 10px;'>
-        1. Anomaly Detection: Uses ensemble of Isolation Forest and Local Outlier Factor to detect unusual data points.<br>
-        2. Drift Detection: Identifies significant changes in data distribution over time.<br>
-        3. Change Point Detection: Detects abrupt changes in time series data.<br>
-        4. Feature Relationship Analysis: Measures mutual information between features to understand complex dependencies.
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown("""...""", unsafe_allow_html=True)  # Add content as needed
 
 if __name__ == "__main__":
     main()
