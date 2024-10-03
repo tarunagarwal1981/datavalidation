@@ -8,6 +8,7 @@ from validators.distance_validation import validate_distance_data
 from validators.speed_validation import validate_speed, fetch_speed_data
 from validators.fuel_rob_validation import validate_fuel_rob_for_vessel, fetch_sf_consumption_logs
 from validators.advanced_validation import run_advanced_validation
+from database import get_db_engine
 
 st.set_page_config(layout="wide")
 
