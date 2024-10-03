@@ -24,14 +24,14 @@ COLUMN_NAMES = {
     'LOAD_TYPE': 'LOAD_TYPE'
 }
 
-# Fetching vessel data from sf_consumption_log
+# Fetching vessel data from sf_consumption_logs
 @st.cache_data
 def load_data(vessel_name, date_filter):
     engine = get_db_engine()
     try:
         query = f"""
         SELECT {', '.join(f'"{col}"' for col in COLUMN_NAMES.values())}
-        FROM sf_consumption_log
+        FROM sf_consumption_logs
         WHERE "{COLUMN_NAMES['VESSEL_NAME']}" = %s
         AND "{COLUMN_NAMES['REPORT_DATE']}" >= %s
         ORDER BY "{COLUMN_NAMES['REPORT_DATE']}"
@@ -135,7 +135,7 @@ def load_data(_engine, vessel_name, date_filter):
     try:
         query = f"""
         SELECT {', '.join(f'"{col}"' for col in COLUMN_NAMES.values())}
-        FROM sf_consumption_log
+        FROM sf_consumption_logs
         WHERE "{COLUMN_NAMES['VESSEL_NAME']}" = %s
         AND "{COLUMN_NAMES['REPORT_DATE']}" >= %s
         ORDER BY "{COLUMN_NAMES['REPORT_DATE']}"
