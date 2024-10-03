@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
-from validators.me_consumption_validation import validate_me_consumption, fetch_vessel_performance_data, fetch_vessel_coefficients, fetch_hull_performance_data
+from validators.me_consumption_validation import fetch_vessel_performance_data, fetch_vessel_coefficients, fetch_hull_performance_data
 from validators.ae_consumption_validation import validate_ae_consumption
 from validators.boiler_consumption_validation import validate_boiler_consumption, fetch_mcr_data
 from validators.distance_validation import validate_distance_data
@@ -56,142 +56,126 @@ def main():
             try:
                 # Establish the database engine only once
                 engine = get_db_engine()
+
+                # Initialize validation results list
                 validation_results = []
 
-                if me_consumption_check or ae_consumption_check or boiler_consumption_check or speed_check or fuel_rob_check:
-                    df = fetch_vessel_performance_data(engine, date_filter)  # Pass engine to fetch data
-                    coefficients_df = fetch_vessel_coefficients(engine)
-                    hull_performance_df = fetch_hull_performance_data(engine)
-                    mcr_df = fetch_mcr_data(engine, date_filter)
-                    sf_consumption_logs = fetch_sf_consumption_logs(engine, date_filter)
-                    
-                    if not df.empty:
-                        vessel_groups = list(df.groupby('vessel_name'))
-                        if max_vessels > 0:
-                            vessel_groups = vessel_groups[:max_vessels]
-                        
-                        # Progress bar setup
-                        progress_bar = st.progress(0)
-                        progress_text = st.empty()
-                        
-                        vessel_type_cache = {}
-                        
-                        for i, (vessel_name, vessel_data) in enumerate(vessel_groups):
-                            vessel_type = vessel_data['vessel_type'].iloc[0]
-                            vessel_coefficients = coefficients_df[coefficients_df['vessel_name'] == vessel_name].iloc[0] if not coefficients_df[coefficients_df['vessel_name'] == vessel_name].empty else None
-                            
-                            hull_performance = hull_performance_df[hull_performance_df['vessel_name'] == vessel_name]['hull_rough_power_loss_pct_ed'].iloc[0] if not hull_performance_df[hull_performance_df['vessel_name'] == vessel_name].empty else 0
-                            hull_performance_factor = 1 + (hull_performance / 100)
-                            
-                            mcr_value = mcr_df[mcr_df['Vessel_Name'] == vessel_name]['ME_1_MCR_kW'].iloc[0] if not mcr_df[mcr_df['Vessel_Name'] == vessel_name].empty else None
-                            mcr_value = float(mcr_value) if pd.notna(mcr_value) else None
-                            
-                            for _, row in vessel_data.iterrows():
-                                failure_reasons = []
-                                
-                                if me_consumption_check:
-                                    me_failure_reasons = validate_me_consumption(row, vessel_data, vessel_type, vessel_coefficients, hull_performance_factor)
-                                    failure_reasons.extend(me_failure_reasons)
-                                
-                                if ae_consumption_check:
-                                    ae_failure_reasons = validate_ae_consumption(row, vessel_data, date_filter)
-                                    failure_reasons.extend(ae_failure_reasons)
-                                
-                                if boiler_consumption_check:
-                                    boiler_failure_reasons = validate_boiler_consumption(row, mcr_value)
-                                    failure_reasons.extend(boiler_failure_reasons)
-                                
-                                if speed_check:
-                                    speed_failure_reasons = validate_speed(row, vessel_type_cache)
-                                    failure_reasons.extend(speed_failure_reasons)
-                                
-                                if fuel_rob_check:
-                                    fuel_rob_failures = validate_fuel_rob_for_vessel(sf_consumption_logs, vessel_name)
-                                    failure_reasons.extend([failure['Remarks'] for failure in fuel_rob_failures if failure['Report Date'] == row['reportdate']])
-                                
-                                if failure_reasons:
-                                    validation_results.append({
-                                        'Vessel Name': vessel_name,
-                                        'Report Date': row['reportdate'],
-                                        'Remarks': ", ".join(failure_reasons)
-                                    })
-                            
-                            # Update progress bar
-                            progress = (i + 1) / len(vessel_groups)
-                            progress_bar.progress(progress)
-                            progress_text.text(f"Validating: {progress:.0%}")
-                        
-                        progress_bar.empty()
-                        progress_text.empty()
-                
-                # Perform observed distance validation
-                if observed_distance_check:
-                    with st.spinner('Performing distance validation...'):
-                        distance_validation_results = validate_distance_data(engine, date_filter, batch_size)
-                        validation_results.extend(distance_validation_results.to_dict('records'))
-                
-                # Show validation results in a DataFrame
+                # Fetch vessel performance data and check for empty results
+                try:
+                    df = fetch_vessel_performance_data(engine, date_filter)
+                except Exception as e:
+                    st.error(f"Error fetching vessel performance data: {str(e)}")
+                    return  # Early exit if there's an error in fetching data
+
+                # Check if the dataframe is empty
+                if df.empty:
+                    st.warning("No data available for the selected time range.")
+                    return
+
+                # Proceed with validation if data is available
+                coefficients_df = fetch_vessel_coefficients(engine)
+                hull_performance_df = fetch_hull_performance_data(engine)
+                mcr_df = fetch_mcr_data(engine, date_filter)
+                sf_consumption_logs = fetch_sf_consumption_logs(engine, date_filter)
+
+                vessel_groups = list(df.groupby('vessel_name'))
+                if max_vessels > 0:
+                    vessel_groups = vessel_groups[:max_vessels]
+
+                # Progress bar setup
+                progress_bar = st.progress(0)
+                progress_text = st.empty()
+
+                vessel_type_cache = {}
+
+                # Iterate through each vessel group
+                for i, (vessel_name, vessel_data) in enumerate(vessel_groups):
+                    vessel_type = vessel_data['vessel_type'].iloc[0]
+                    vessel_coefficients = coefficients_df[coefficients_df['vessel_name'] == vessel_name].iloc[0] if not coefficients_df[coefficients_df['vessel_name'] == vessel_name].empty else None
+
+                    hull_performance = hull_performance_df[hull_performance_df['vessel_name'] == vessel_name]['hull_rough_power_loss_pct_ed'].iloc[0] if not hull_performance_df[hull_performance_df['vessel_name'] == vessel_name].empty else 0
+                    hull_performance_factor = 1 + (hull_performance / 100)
+
+                    mcr_value = mcr_df[mcr_df['Vessel_Name'] == vessel_name]['ME_1_MCR_kW'].iloc[0] if not mcr_df[mcr_df['Vessel_Name'] == vessel_name].empty else None
+                    mcr_value = float(mcr_value) if pd.notna(mcr_value) else None
+
+                    # Iterate through each row in the vessel data
+                    for _, row in vessel_data.iterrows():
+                        failure_reasons = []
+
+                        if me_consumption_check:
+                            me_failure_reasons = validate_me_consumption(row, vessel_data, vessel_type, vessel_coefficients, hull_performance_factor)
+                            failure_reasons.extend(me_failure_reasons)
+
+                        if ae_consumption_check:
+                            ae_failure_reasons = validate_ae_consumption(row, vessel_data, date_filter)
+                            failure_reasons.extend(ae_failure_reasons)
+
+                        if boiler_consumption_check:
+                            boiler_failure_reasons = validate_boiler_consumption(row, mcr_value)
+                            failure_reasons.extend(boiler_failure_reasons)
+
+                        if speed_check:
+                            speed_failure_reasons = validate_speed(row, vessel_type_cache)
+                            failure_reasons.extend(speed_failure_reasons)
+
+                        if fuel_rob_check:
+                            fuel_rob_failures = validate_fuel_rob_for_vessel(sf_consumption_logs, vessel_name)
+                            failure_reasons.extend([failure['Remarks'] for failure in fuel_rob_failures if failure['Report Date'] == row['reportdate']])
+
+                        if failure_reasons:
+                            validation_results.append({
+                                'Vessel Name': vessel_name,
+                                'Report Date': row['reportdate'],
+                                'Remarks': ", ".join(failure_reasons)
+                            })
+
+                    # Update progress bar
+                    progress = (i + 1) / len(vessel_groups)
+                    progress_bar.progress(progress)
+                    progress_text.text(f"Validating: {progress:.0%}")
+
+                progress_bar.empty()
+                progress_text.empty()
+
+                # Display validation results
                 all_results = pd.DataFrame(validation_results)
-                
                 if not all_results.empty:
                     st.write("Validation Results:")
                     st.dataframe(all_results)
-                    
+
                     csv = all_results.to_csv(index=False)
                     st.download_button(label="Download validation report as CSV", data=csv, file_name='validation_report.csv', mime='text/csv', key="download_button")
                 else:
                     st.write("All data passed the validation checks!")
 
-                # Run Advanced Validations
+                # Run Advanced Validations if checked
                 if advanced_validation_check:
                     st.write("Running Advanced Validations...")
                     for vessel_name in df['vessel_name'].unique():
-                        advanced_results = run_advanced_validation(engine, vessel_name)
-                        
+                        advanced_results = run_advanced_validation(engine, vessel_name, date_filter)
+                        # Display advanced validation results for each vessel
                         st.write(f"Advanced Validation Results for {vessel_name}:")
                         st.write(f"Anomalies detected: {len(advanced_results['anomalies'])}")
                         st.write("Drift detected in features:", ", ".join([f for f, d in advanced_results['drift'].items() if d]))
-                        
+
                         st.write("Change points detected:")
                         for feature, points in advanced_results['change_points'].items():
                             st.write(f"  {feature}: {points}")
-                        
+
                         st.write("Feature relationships (Mutual Information):")
                         for feature, mi in advanced_results['relationships'].items():
                             st.write(f"  {feature}: {mi:.4f}")
 
-                        st.write("---")  # Separator between vessels
+                        st.write("---")
 
                 if advanced_validation_check and st.button('Retrain Models'):
                     st.write("Retraining models... (implement retraining logic here)")
-            
+
             except Exception as e:
                 st.error(f"An error occurred: {str(e)}")
 
-        st.write("This application validates vessel performance data based on selected criteria.")
-        st.write("Use the checkboxes in the sidebar to select which validations to run, then click the 'Validate Data' button to start the validation process.")
-
-    with right_sidebar:
-        st.markdown("<h2 style='font-size: 18px;'>Validation Checks</h2>", unsafe_allow_html=True)
-        
-        st.markdown("<h3 style='font-size: 14px;'>ME Consumption Validations</h3>", unsafe_allow_html=True)
-        st.markdown("...")  # Add content as needed
-
-        st.markdown("<h3 style='font-size: 14px;'>AE Consumption Validations</h3>", unsafe_allow_html=True)
-        st.markdown("...")  # Add content as needed
-
-        st.markdown("<h3 style='font-size: 14px;'>Boiler Consumption Validations</h3>", unsafe_allow_html=True)
-        st.markdown("...")  # Add content as needed
-
-        st.markdown("<h3 style='font-size: 14px;'>Observed Distance Validations</h3>", unsafe_allow_html=True)
-        st.markdown("...")  # Add content as needed
-
-        st.markdown("<h3 style='font-size: 14px;'>Speed Validations</h3>", unsafe_allow_html=True)
-        st.markdown("""...""", unsafe_allow_html=True)  # Add content as needed
-
-        # Advanced Validation descriptions
-        st.markdown("<h3 style='font-size: 14px;'>Advanced Validations</h3>", unsafe_allow_html=True)
-        st.markdown("""...""", unsafe_allow_html=True)  # Add content as needed
+        st.write("This application validates vessel performance data based on selected criteria. Use the checkboxes in the sidebar to select which validations to run, then click the 'Validate Data' button to start the validation process.")
 
 if __name__ == "__main__":
     main()
