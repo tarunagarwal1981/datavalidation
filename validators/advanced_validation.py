@@ -126,8 +126,31 @@ def validate_relationships(df):
     return relationships
 
 # Main function to run advanced validations on the vessel data
-def run_advanced_validation(vessel_name, date_filter):
-    df = load_data(vessel_name, date_filter)
+# In advanced_validation.py
+
+# ... (keep all the imports and other functions as they are)
+
+@st.cache_data
+def load_data(_engine, vessel_name, date_filter):
+    try:
+        query = f"""
+        SELECT {', '.join(f'"{col}"' for col in COLUMN_NAMES.values())}
+        FROM sf_consumption_log
+        WHERE "{COLUMN_NAMES['VESSEL_NAME']}" = %s
+        AND "{COLUMN_NAMES['REPORT_DATE']}" >= %s
+        ORDER BY "{COLUMN_NAMES['REPORT_DATE']}"
+        """
+        df = pd.read_sql_query(query, _engine, params=(vessel_name, date_filter))
+        df[COLUMN_NAMES['REPORT_DATE']] = pd.to_datetime(df[COLUMN_NAMES['REPORT_DATE']])
+        return df
+    except SQLAlchemyError as e:
+        st.error(f"Error fetching data for {vessel_name}: {str(e)}")
+        return pd.DataFrame()
+
+# ... (keep all other functions as they are)
+
+def run_advanced_validation(engine, vessel_name, date_filter):
+    df = load_data(engine, vessel_name, date_filter)
     
     if df.empty:
         raise ValueError(f"No data available for vessel {vessel_name}")
@@ -146,6 +169,8 @@ def run_advanced_validation(vessel_name, date_filter):
     }
     
     return results
+
+
 
 # Example of how to use the advanced validation functionality
 if __name__ == "__main__":
