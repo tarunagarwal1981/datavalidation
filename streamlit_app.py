@@ -7,7 +7,7 @@ from validators.boiler_consumption_validation import validate_boiler_consumption
 from validators.distance_validation import validate_distance_data
 from validators.speed_validation import validate_speed, fetch_speed_data
 from validators.fuel_rob_validation import validate_fuel_rob_for_vessel, fetch_sf_consumption_logs
-from advanced_validation import run_advanced_validation
+from validators.advanced_validation import run_advanced_validation
 
 st.set_page_config(layout="wide")
 
