@@ -56,7 +56,7 @@ def main():
                         observed_distance_check, speed_check, fuel_rob_check, advanced_validation_check]):
                     
                     with st.spinner('Fetching vessel performance data...'):
-                        df = fetch_vessel_performance_data(engine, date_filter)
+                        df = fetch_vessel_performance_data(date_filter)
                     
                     if df.empty:
                         st.warning("No data found for the selected time range.")
@@ -65,10 +65,10 @@ def main():
                     # Fetch additional data if needed
                     if any([me_consumption_check, ae_consumption_check, boiler_consumption_check, speed_check, fuel_rob_check]):
                         with st.spinner('Fetching additional data...'):
-                            coefficients_df = fetch_vessel_coefficients(engine)
-                            hull_performance_df = fetch_hull_performance_data(engine)
-                            mcr_df = fetch_mcr_data(engine, date_filter)
-                            sf_consumption_logs = fetch_sf_consumption_logs(engine, date_filter)
+                            coefficients_df = fetch_vessel_coefficients()
+                            hull_performance_df = fetch_hull_performance_data()
+                            mcr_df = fetch_mcr_data(date_filter)
+                            sf_consumption_logs = fetch_sf_consumption_logs(date_filter)
 
                     vessel_groups = list(df.groupby('vessel_name'))
                     if max_vessels > 0:
@@ -128,7 +128,7 @@ def main():
 
                     if observed_distance_check:
                         with st.spinner('Performing distance validation...'):
-                            distance_validation_results = validate_distance_data(engine, date_filter, batch_size)
+                            distance_validation_results = validate_distance_data(date_filter, batch_size)
                             validation_results.extend(distance_validation_results.to_dict('records'))
 
                     all_results = pd.DataFrame(validation_results)
@@ -193,6 +193,6 @@ def main():
 
         st.markdown("<h3 style='font-size: 14px;'>Advanced Validations</h3>", unsafe_allow_html=True)
         st.markdown("...")  # Add content as needed
-
+        
 if __name__ == "__main__":
     main()
