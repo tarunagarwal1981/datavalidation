@@ -86,7 +86,6 @@ def detect_anomalies(df):
     lof = LocalOutlierFactor(n_neighbors=20, contamination=0.1)
     iso_forest = IsolationForest(contamination=0.1, random_state=42)
 
-    # Anomaly detection using both methods
     try:
         lof_anomalies = lof.fit_predict(df[features])
         iso_forest_anomalies = iso_forest.fit_predict(df[features])
