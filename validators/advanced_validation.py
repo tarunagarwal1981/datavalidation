@@ -7,7 +7,6 @@ from sqlalchemy.exc import SQLAlchemyError
 import streamlit as st
 from database import get_db_engine
 
-
 # Configuration for column names
 COLUMN_NAMES = {
     'VESSEL_NAME': 'VESSEL_NAME',
@@ -24,8 +23,7 @@ COLUMN_NAMES = {
 
 # Fetching vessel data from sf_consumption_logs
 @st.cache_data
-def load_data(vessel_name, date_filter):
-    engine = get_db_engine()
+def load_data(engine, vessel_name, date_filter):
     try:
         query = f"""
         SELECT {', '.join(f'"{col}"' for col in COLUMN_NAMES.values())}
@@ -76,10 +74,14 @@ def preprocess_data(df):
     
     # Combine scaled numeric features with categorical ones
     df_scaled = pd.DataFrame(scaled_numeric_features, columns=numeric_columns)
-
+    
     # Add categorical features back to the dataframe
     df_scaled[COLUMN_NAMES['VESSEL_ACTIVITY']] = df[COLUMN_NAMES['VESSEL_ACTIVITY']]
     df_scaled[COLUMN_NAMES['LOAD_TYPE']] = df[COLUMN_NAMES['LOAD_TYPE']]
+    
+    # Add REPORT_DATE and VESSEL_NAME back to the dataframe
+    df_scaled[COLUMN_NAMES['REPORT_DATE']] = df[COLUMN_NAMES['REPORT_DATE']].values
+    df_scaled[COLUMN_NAMES['VESSEL_NAME']] = df[COLUMN_NAMES['VESSEL_NAME']].values
 
     # Ensure all features are included
     st.write(f"Shape of features after scaling: {df_scaled.shape}")
@@ -102,11 +104,12 @@ def detect_anomalies(df):
     lof = LocalOutlierFactor(n_neighbors=20, contamination=0.1)
     iso_forest = IsolationForest(contamination=0.1, random_state=42)
     
+    # For LOF, we only get the labels via fit_predict
     lof_anomalies = lof.fit_predict(df[features])
     iso_forest_anomalies = iso_forest.fit_predict(df[features])
     
     combined_anomalies = (lof_anomalies == -1).astype(int) + (iso_forest_anomalies == -1).astype(int)
-    anomalies = df[combined_anomalies > 1]  # Keep only anomalies
+    anomalies = df[combined_anomalies > 1]  # Keep only anomalies detected by both methods
 
     # Prepare the results with vessel name, report date, and the detected discrepancy
     anomaly_results = anomalies[[COLUMN_NAMES['VESSEL_NAME'], COLUMN_NAMES['REPORT_DATE']]].copy()
@@ -116,16 +119,19 @@ def detect_anomalies(df):
 
 # Main function to run advanced validations on the vessel data
 def run_advanced_validation(engine, vessel_name, date_filter):
-    df = load_data(vessel_name, date_filter)
+    df = load_data(engine, vessel_name, date_filter)
     
     if df.empty:
         raise ValueError(f"No data available for vessel {vessel_name}")
     
     df_processed = preprocess_data(df)
     
-    # Split data into train and test sets
-    train_df = df_processed[df_processed[COLUMN_NAMES['REPORT_DATE']] < df_processed[COLUMN_NAMES['REPORT_DATE']].max() - pd.Timedelta(days=90)]
-    test_df = df_processed[df_processed[COLUMN_NAMES['REPORT_DATE']] >= df_processed[COLUMN_NAMES['REPORT_DATE']].max() - pd.Timedelta(days=90)]
+    # Split data into train and test sets using the REPORT_DATE from df_processed
+    max_date = df_processed[COLUMN_NAMES['REPORT_DATE']].max()
+    cutoff_date = max_date - pd.Timedelta(days=90)
+    
+    train_df = df_processed[df_processed[COLUMN_NAMES['REPORT_DATE']] < cutoff_date]
+    test_df = df_processed[df_processed[COLUMN_NAMES['REPORT_DATE']] >= cutoff_date]
     
     results = {
         'anomalies': detect_anomalies(test_df)  # Return user-friendly anomaly results
@@ -143,7 +149,7 @@ if __name__ == "__main__":
     vessel_name = "Example_Vessel"  # Replace with actual vessel name
 
     try:
-        results = run_advanced_validation(engine, vessel_name, date_filter)  # Pass engine as first argument
+        results = run_advanced_validation(engine, vessel_name, date_filter)
         st.write(pd.DataFrame(results['anomalies']))  # Display anomalies
     except ValueError as e:
         st.error(str(e))
