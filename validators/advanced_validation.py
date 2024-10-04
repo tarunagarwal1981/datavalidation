@@ -78,22 +78,34 @@ def detect_anomalies(df):
         COLUMN_NAMES['VESSEL_ACTIVITY'], COLUMN_NAMES['LOAD_TYPE']
     ]
 
+    # Ensure there are enough records for anomaly detection
+    if len(df) < 5:
+        st.write("Not enough data for anomaly detection.")
+        return pd.DataFrame(columns=[COLUMN_NAMES['VESSEL_NAME'], COLUMN_NAMES['REPORT_DATE'], 'Discrepancy'])
+
     lof = LocalOutlierFactor(n_neighbors=20, contamination=0.1)
     iso_forest = IsolationForest(contamination=0.1, random_state=42)
 
-    lof_anomalies = lof.fit_predict(df[features])
-    iso_forest_anomalies = iso_forest.fit_predict(df[features])
+    # Anomaly detection using both methods
+    try:
+        lof_anomalies = lof.fit_predict(df[features])
+        iso_forest_anomalies = iso_forest.fit_predict(df[features])
 
-    combined_anomalies = (lof_anomalies == -1).astype(int) + (iso_forest_anomalies == -1).astype(int)
-    anomalies = df[combined_anomalies > 1]  # Detected by both models
+        # Combine results: anomalies if detected by both methods
+        combined_anomalies = (lof_anomalies == -1).astype(int) + (iso_forest_anomalies == -1).astype(int)
+        anomalies = df[combined_anomalies > 1]
 
-    if anomalies.empty:
+        # Prepare the results
+        if anomalies.empty:
+            return pd.DataFrame(columns=[COLUMN_NAMES['VESSEL_NAME'], COLUMN_NAMES['REPORT_DATE'], 'Discrepancy'])
+        
+        anomaly_results = anomalies[[COLUMN_NAMES['VESSEL_NAME'], COLUMN_NAMES['REPORT_DATE']]].copy()
+        anomaly_results['Discrepancy'] = 'Anomaly detected'
+
+        return anomaly_results
+    except Exception as e:
+        st.error(f"Error during anomaly detection: {e}")
         return pd.DataFrame(columns=[COLUMN_NAMES['VESSEL_NAME'], COLUMN_NAMES['REPORT_DATE'], 'Discrepancy'])
-
-    anomaly_results = anomalies[[COLUMN_NAMES['VESSEL_NAME'], COLUMN_NAMES['REPORT_DATE']]].copy()
-    anomaly_results['Discrepancy'] = 'Anomaly detected'
-
-    return anomaly_results
 
 # Detect data drift using KS Test for numeric columns and chi-squared test for categorical columns
 def detect_data_drift(train_df, test_df):
