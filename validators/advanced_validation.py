@@ -5,6 +5,8 @@ from sklearn.neighbors import LocalOutlierFactor
 from sklearn.preprocessing import RobustScaler
 from sqlalchemy.exc import SQLAlchemyError
 import streamlit as st
+from database import get_db_engine
+
 
 # Configuration for column names
 COLUMN_NAMES = {
