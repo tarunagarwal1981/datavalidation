@@ -83,6 +83,10 @@ def preprocess_data(df):
     df_scaled[COLUMN_NAMES['VESSEL_ACTIVITY']] = df[COLUMN_NAMES['VESSEL_ACTIVITY']]
     df_scaled[COLUMN_NAMES['LOAD_TYPE']] = df[COLUMN_NAMES['LOAD_TYPE']]
     
+    # Retain the original 'REPORT_DATE' and 'VESSEL_NAME' for reporting purposes
+    df_scaled[COLUMN_NAMES['REPORT_DATE']] = df[COLUMN_NAMES['REPORT_DATE']]
+    df_scaled[COLUMN_NAMES['VESSEL_NAME']] = df[COLUMN_NAMES['VESSEL_NAME']]
+    
     # Provide the shape of the scaled numeric and encoded categorical features
     st.write(f"Shape of features after scaling: {df_scaled.shape}")
     
@@ -99,7 +103,7 @@ def detect_anomalies(df):
     
     # Ensure all features are numeric
     df[features] = df[features].apply(pd.to_numeric, errors='coerce')
-    df = df.dropna()  # Drop rows with missing values after scaling
+    df = df.dropna(subset=features)  # Drop rows with missing values after scaling
     
     # Check the shape of the features to be used in anomaly detection
     st.write(f"Shape of features for anomaly detection: {df[features].shape}")
@@ -111,9 +115,13 @@ def detect_anomalies(df):
     iso_forest_anomalies = iso_forest.fit_predict(df[features])
     
     combined_anomalies = (lof_anomalies == -1).astype(int) + (iso_forest_anomalies == -1).astype(int)
-    anomalies = df[combined_anomalies > 1]
+    anomalies = df[combined_anomalies > 1]  # Keep only anomalies
+
+    # Prepare the results with vessel name, report date, and the detected discrepancy
+    anomaly_results = anomalies[[COLUMN_NAMES['VESSEL_NAME'], COLUMN_NAMES['REPORT_DATE']]].copy()
+    anomaly_results['Discrepancy'] = 'Anomaly detected by both IsolationForest and LocalOutlierFactor'
     
-    return anomalies
+    return anomaly_results
 
 # Main function to run advanced validations on the vessel data
 def run_advanced_validation(engine, vessel_name, date_filter):
@@ -129,7 +137,7 @@ def run_advanced_validation(engine, vessel_name, date_filter):
     test_df = df_processed[df_processed[COLUMN_NAMES['REPORT_DATE']] >= df_processed[COLUMN_NAMES['REPORT_DATE']].max() - pd.Timedelta(days=90)]
     
     results = {
-        'anomalies': detect_anomalies(test_df),
+        'anomalies': detect_anomalies(test_df),  # Return user-friendly format
         'drift': detect_drift(train_df, test_df),
         'change_points': detect_change_points(test_df),
         'relationships': validate_relationships(test_df)
@@ -149,7 +157,7 @@ if __name__ == "__main__":
 
     try:
         results = run_advanced_validation(engine, vessel_name, date_filter)  # Pass engine as first argument
-        print(pd.DataFrame(results))
+        print(pd.DataFrame(results['anomalies']))  # Display anomalies in DataFrame format
     except ValueError as e:
         print(str(e))
     except Exception as e:
