@@ -56,8 +56,9 @@ def preprocess_data(df):
     for col in numeric_columns:
         df[col] = pd.to_numeric(df[col], errors='coerce')  # Convert invalid numbers to NaN
     
-    # Debugging: Check if any columns have NaN values
-    st.write(f"Missing values per column:\n{df[numeric_columns].isna().sum()}")
+    # Display missing values in a user-friendly format
+    missing_values_info = df[numeric_columns].isna().sum().to_dict()
+    st.write(f"Missing values per column: {missing_values_info}")
     
     # Fill missing numeric values with column medians
     df[numeric_columns] = df[numeric_columns].fillna(df[numeric_columns].median())
@@ -69,10 +70,20 @@ def preprocess_data(df):
     # Scale the numeric columns
     scaler = RobustScaler()
     
-    # Debugging: Check if all numeric columns have the same shape
-    st.write(f"Shape of numeric columns before scaling: {[df[col].shape for col in numeric_columns]}")
+    # Check if all numeric columns have the same number of rows
+    shapes = [df[col].shape for col in numeric_columns]
+    if not all(shape == shapes[0] for shape in shapes):
+        st.error(f"Numeric column shapes do not match: {shapes}")
+        raise ValueError(f"Numeric column shapes do not match: {shapes}")
     
-    df[numeric_columns] = scaler.fit_transform(df[numeric_columns])
+    # Provide the shape of the numeric columns before scaling
+    st.write(f"Shape of numeric columns before scaling: {shapes}")
+    
+    # Scaling the features
+    scaled_features = scaler.fit_transform(df[numeric_columns])
+    
+    # Provide the shape of the scaled features
+    st.write(f"Shape of features to be scaled: {scaled_features.shape}")
     
     return df
 
@@ -90,8 +101,8 @@ def detect_anomalies(df):
     
     scaled_features = df[features]  # Ensure only numeric data goes to the scaler
     
-    # Debugging: Check the shape of the features to be scaled
-    st.write(f"Shape of features to be scaled: {scaled_features.shape}")
+    # Check the shape of the features to be scaled
+    st.write(f"Shape of features to be used in anomaly detection: {scaled_features.shape}")
     
     lof = LocalOutlierFactor(n_neighbors=20, contamination=0.1)
     iso_forest = IsolationForest(contamination=0.1, random_state=42)
@@ -186,10 +197,12 @@ if __name__ == "__main__":
 
     engine = get_db_engine()  # Get the database engine
     date_filter = datetime.now() - timedelta(days=180)  # Last 6 months
-    vessel_name = "Example_Vessel"  # Replace with actual vessel name
+    vessel_name = "ACE ETERNITY"  # Example vessel name
 
     try:
         results = run_advanced_validation(engine, vessel_name, date_filter)  # Pass engine as first argument
         print(pd.DataFrame(results))
     except ValueError as e:
         print(str(e))
+    except Exception as e:
+        print(f"An unexpected error occurred: {str(e)}")
