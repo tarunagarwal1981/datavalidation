@@ -113,6 +113,11 @@ def detect_anomalies(df):
     # Check the shape of the features to be used in anomaly detection
     st.write(f"Shape of features for anomaly detection: {df[features].shape}")
 
+    # Check if there is enough data
+    if df[features].shape[0] < 5:
+        st.write("Not enough data for anomaly detection.")
+        return pd.DataFrame(columns=[COLUMN_NAMES['VESSEL_NAME'], COLUMN_NAMES['REPORT_DATE'], 'Discrepancy'])
+
     lof = LocalOutlierFactor(n_neighbors=20, contamination=0.1)
     iso_forest = IsolationForest(contamination=0.1, random_state=42)
 
@@ -124,6 +129,9 @@ def detect_anomalies(df):
 
     # Check if anomalies are found
     st.write(f"Anomalies detected: {len(anomalies)}")
+
+    if anomalies.empty:
+        return pd.DataFrame(columns=[COLUMN_NAMES['VESSEL_NAME'], COLUMN_NAMES['REPORT_DATE'], 'Discrepancy'])
 
     # Prepare the results with vessel name, report date, and the detected discrepancy
     anomaly_results = anomalies[[COLUMN_NAMES['VESSEL_NAME'], COLUMN_NAMES['REPORT_DATE']]].copy()
@@ -176,7 +184,10 @@ def detect_data_drift(train_df, test_df):
                 st.write(f"Skipping chi-squared test for {col} due to error: {e}")
                 continue  # Skip to next column
 
-    drift_df = pd.DataFrame(drift_results)
+    if drift_results:
+        drift_df = pd.DataFrame(drift_results)
+    else:
+        drift_df = pd.DataFrame(columns=['VESSEL_NAME', 'REPORT_DATE', 'Discrepancy'])
 
     return drift_df
 
@@ -216,8 +227,13 @@ def run_advanced_validation(engine, vessel_name, date_filter):
     # Combine the results into a single DataFrame
     combined_results = pd.concat([anomalies_df, drift_df], ignore_index=True)
 
-    # Prepare the results to have only the required columns
-    final_results = combined_results[['VESSEL_NAME', 'REPORT_DATE', 'Discrepancy']]
+    if combined_results.empty:
+        st.write("No discrepancies detected.")
+        # Return an empty DataFrame with the required columns
+        final_results = pd.DataFrame(columns=['VESSEL_NAME', 'REPORT_DATE', 'Discrepancy'])
+    else:
+        # Prepare the results to have only the required columns
+        final_results = combined_results[['VESSEL_NAME', 'REPORT_DATE', 'Discrepancy']]
 
     return final_results
 
@@ -232,6 +248,9 @@ if __name__ == "__main__":
     try:
         final_results = run_advanced_validation(engine, vessel_name, date_filter)
         st.write(f"Advanced Validation Results for {vessel_name}:")
-        st.write(final_results)  # Display the final results table
+        if final_results.empty:
+            st.write("No discrepancies detected.")
+        else:
+            st.write(final_results)  # Display the final results table
     except ValueError as e:
         st.error(f"An error occurred: {str(e)}")
