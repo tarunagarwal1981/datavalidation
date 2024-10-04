@@ -10,7 +10,7 @@ from sklearn.feature_selection import mutual_info_regression, mutual_info_classi
 from database import get_db_engine
 import streamlit as st
 
-# Configuration for column names based on your provided table schema
+# Configuration for column names
 COLUMN_NAMES = {
     'VESSEL_NAME': 'VESSEL_NAME',
     'REPORT_DATE': 'REPORT_DATE',
@@ -24,7 +24,7 @@ COLUMN_NAMES = {
     'LOAD_TYPE': 'LOAD_TYPE'
 }
 
-# Fetching vessel data from the sf_consumption_logs table
+# Fetching vessel data from sf_consumption_logs
 @st.cache_data
 def load_data(_vessel_name, _date_filter):
     engine = get_db_engine()  # Initialize the engine inside the function (not cached)
@@ -45,25 +45,23 @@ def load_data(_vessel_name, _date_filter):
 
 # Preprocess data: handle missing values and scale numeric columns
 def preprocess_data(df):
-    # Handling missing values
-    df.fillna(df.median(numeric_only=True), inplace=True)  # Only for numeric columns
-    
-    # Encoding categorical variables
-    df[COLUMN_NAMES['VESSEL_ACTIVITY']] = pd.Categorical(df[COLUMN_NAMES['VESSEL_ACTIVITY']]).codes
-    df[COLUMN_NAMES['LOAD_TYPE']] = pd.Categorical(df[COLUMN_NAMES['LOAD_TYPE']]).codes
-    
-    # Normalize numeric columns
+    # Ensure only numeric columns are scaled, and non-numeric columns are ignored or encoded
     numeric_columns = [
         COLUMN_NAMES['ME_CONSUMPTION'], COLUMN_NAMES['OBSERVERD_DISTANCE'], 
         COLUMN_NAMES['SPEED'], COLUMN_NAMES['DISPLACEMENT'], 
         COLUMN_NAMES['STEAMING_TIME_HRS'], COLUMN_NAMES['WINDFORCE']
     ]
     
-    # Ensure columns are numeric
-    df[numeric_columns] = df[numeric_columns].apply(pd.to_numeric, errors='coerce')
-    
-    # Replace any remaining non-numeric values with NaN and fill with median
+    # Ensure columns are numeric and handle invalid entries
+    for col in numeric_columns:
+        df[col] = pd.to_numeric(df[col], errors='coerce')  # Convert invalid numbers to NaN
+
+    # Fill missing numeric values with column medians
     df[numeric_columns] = df[numeric_columns].fillna(df[numeric_columns].median())
+    
+    # Encoding categorical variables
+    df[COLUMN_NAMES['VESSEL_ACTIVITY']] = pd.Categorical(df[COLUMN_NAMES['VESSEL_ACTIVITY']]).codes
+    df[COLUMN_NAMES['LOAD_TYPE']] = pd.Categorical(df[COLUMN_NAMES['LOAD_TYPE']]).codes
 
     # Scale the numeric columns
     scaler = RobustScaler()
@@ -79,7 +77,10 @@ def detect_anomalies(df):
         COLUMN_NAMES['VESSEL_ACTIVITY'], COLUMN_NAMES['LOAD_TYPE']
     ]
     
-    # Scale features
+    # Ensure only numeric features are used
+    df[features] = df[features].apply(pd.to_numeric, errors='coerce')
+    df = df.dropna()  # Drop any rows that still have NaN values after conversion
+    
     scaled_features = df[features]  # Ensure only numeric data goes to the scaler
     
     lof = LocalOutlierFactor(n_neighbors=20, contamination=0.1)
