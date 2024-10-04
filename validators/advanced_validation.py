@@ -14,7 +14,7 @@ import streamlit as st
 COLUMN_NAMES = {
     'VESSEL_NAME': 'VESSEL_NAME',
     'REPORT_DATE': 'REPORT_DATE',
-    'ME_CONSUMPTION': 'ME_CONSUMPTION',  # Ensure that this column exists in your table
+    'ME_CONSUMPTION': 'ME_CONSUMPTION',  
     'OBSERVERD_DISTANCE': 'OBSERVERD_DISTANCE',
     'SPEED': 'SPEED',
     'DISPLACEMENT': 'DISPLACEMENT',
@@ -26,8 +26,8 @@ COLUMN_NAMES = {
 
 # Fetching vessel data from the sf_consumption_logs table
 @st.cache_data
-def load_data(vessel_name, date_filter):
-    engine = get_db_engine()
+def load_data(_vessel_name, _date_filter):
+    engine = get_db_engine()  # Initialize the engine inside the function (not cached)
     try:
         query = f"""
         SELECT {', '.join(f'"{col}"' for col in COLUMN_NAMES.values())}
@@ -36,11 +36,11 @@ def load_data(vessel_name, date_filter):
         AND "{COLUMN_NAMES['REPORT_DATE']}" >= %s
         ORDER BY "{COLUMN_NAMES['REPORT_DATE']}"
         """
-        df = pd.read_sql_query(query, engine, params=(vessel_name, date_filter))
+        df = pd.read_sql_query(query, engine, params=(_vessel_name, _date_filter))
         df[COLUMN_NAMES['REPORT_DATE']] = pd.to_datetime(df[COLUMN_NAMES['REPORT_DATE']])
         return df
     except SQLAlchemyError as e:
-        st.error(f"Error fetching data for {vessel_name}: {str(e)}")
+        st.error(f"Error fetching data for {_vessel_name}: {str(e)}")
         return pd.DataFrame()
 
 # Preprocess data: handle missing values and scale numeric columns
@@ -147,7 +147,7 @@ def validate_relationships(df):
 
 # Main function to run advanced validations on the vessel data
 def run_advanced_validation(engine, vessel_name, date_filter):
-    df = load_data(engine, vessel_name, date_filter)
+    df = load_data(vessel_name, date_filter)
     
     if df.empty:
         raise ValueError(f"No data available for vessel {vessel_name}")
