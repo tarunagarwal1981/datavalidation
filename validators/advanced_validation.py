@@ -84,28 +84,35 @@ def detect_anomalies(df):
         return pd.DataFrame(columns=[COLUMN_NAMES['VESSEL_NAME'], COLUMN_NAMES['REPORT_DATE'], 'Discrepancy'])
 
     try:
-        lof = LocalOutlierFactor(n_neighbors=20, contamination=0.1)
+        # Apply Isolation Forest
         iso_forest = IsolationForest(contamination=0.1, random_state=42)
-
-        # Fit and predict anomalies using both methods
-        lof_anomalies = lof.fit_predict(df[features])
         iso_forest_anomalies = iso_forest.fit_predict(df[features])
 
-        # Select records where both methods agree on the anomaly
-        anomalies = df[(lof_anomalies == -1) & (iso_forest_anomalies == -1)]
+        # Apply Local Outlier Factor (LOF)
+        lof = LocalOutlierFactor(n_neighbors=20, contamination=0.1)
+        lof_anomalies = lof.fit_predict(df[features])
+
+        # Check if shapes match
+        if iso_forest_anomalies.shape != lof_anomalies.shape:
+            st.error(f"Shape mismatch between LOF and Isolation Forest: {iso_forest_anomalies.shape} vs {lof_anomalies.shape}")
+            return pd.DataFrame(columns=[COLUMN_NAMES['VESSEL_NAME'], COLUMN_NAMES['REPORT_DATE'], 'Discrepancy'])
+
+        # Combine results: anomalies detected by both methods
+        combined_anomalies = np.logical_and(iso_forest_anomalies == -1, lof_anomalies == -1)
+        anomalies = df[combined_anomalies]
 
         # Prepare the results
         if anomalies.empty:
             st.write("No anomalies detected.")
             return pd.DataFrame(columns=[COLUMN_NAMES['VESSEL_NAME'], COLUMN_NAMES['REPORT_DATE'], 'Discrepancy'])
-        
-        # If anomalies are found, create the discrepancy DataFrame
+
+        # If anomalies are found, return the discrepancy
         anomaly_results = anomalies[[COLUMN_NAMES['VESSEL_NAME'], COLUMN_NAMES['REPORT_DATE']]].copy()
         anomaly_results['Discrepancy'] = 'Anomaly detected'
-
         return anomaly_results
+
     except Exception as e:
-        st.error(f"Error during anomaly detection: {str(e)}")
+        st.error(f"Error during anomaly detection: {e}")
         return pd.DataFrame(columns=[COLUMN_NAMES['VESSEL_NAME'], COLUMN_NAMES['REPORT_DATE'], 'Discrepancy'])
 
 # Detect data drift using KS Test for numeric columns and chi-squared test for categorical columns
@@ -164,8 +171,7 @@ def run_advanced_validation(engine, vessel_name, date_filter):
     drift_df = detect_data_drift(train_df, test_df)
     anomalies_df = detect_anomalies(test_df)
 
-    # Ensure both DataFrames are valid before concatenating
-    combined_results = pd.concat([anomalies_df, drift_df], ignore_index=True) if not anomalies_df.empty or not drift_df.empty else pd.DataFrame(columns=['VESSEL_NAME', 'REPORT_DATE', 'Discrepancy'])
+    combined_results = pd.concat([anomalies_df, drift_df], ignore_index=True)
 
     if combined_results.empty:
         st.write("No discrepancies detected.")
