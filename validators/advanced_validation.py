@@ -4,10 +4,6 @@ from sklearn.ensemble import IsolationForest
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.preprocessing import RobustScaler
 from sqlalchemy.exc import SQLAlchemyError
-from scipy.stats import ks_2samp, chisquare
-import ruptures as rpt
-from sklearn.feature_selection import mutual_info_regression, mutual_info_classif
-from database import get_db_engine
 import streamlit as st
 
 # Configuration for column names
@@ -26,8 +22,8 @@ COLUMN_NAMES = {
 
 # Fetching vessel data from sf_consumption_logs
 @st.cache_data
-def load_data(_vessel_name, _date_filter):
-    engine = get_db_engine()  # Initialize the engine inside the function (not cached)
+def load_data(vessel_name, date_filter):
+    engine = get_db_engine()
     try:
         query = f"""
         SELECT {', '.join(f'"{col}"' for col in COLUMN_NAMES.values())}
@@ -36,11 +32,11 @@ def load_data(_vessel_name, _date_filter):
         AND "{COLUMN_NAMES['REPORT_DATE']}" >= %s
         ORDER BY "{COLUMN_NAMES['REPORT_DATE']}"
         """
-        df = pd.read_sql_query(query, engine, params=(_vessel_name, _date_filter))
+        df = pd.read_sql_query(query, engine, params=(vessel_name, date_filter))
         df[COLUMN_NAMES['REPORT_DATE']] = pd.to_datetime(df[COLUMN_NAMES['REPORT_DATE']])
         return df
     except SQLAlchemyError as e:
-        st.error(f"Error fetching data for {_vessel_name}: {str(e)}")
+        st.error(f"Error fetching data for {vessel_name}: {str(e)}")
         return pd.DataFrame()
 
 # Preprocess data: handle missing values and scale numeric columns
@@ -76,34 +72,27 @@ def preprocess_data(df):
     # Scaling the numeric features
     scaled_numeric_features = scaler.fit_transform(df[numeric_columns])
     
-    # Combine numeric and categorical features (if needed)
+    # Combine scaled numeric features with categorical ones
     df_scaled = pd.DataFrame(scaled_numeric_features, columns=numeric_columns)
-    
-    # Include the encoded categorical variables
+
+    # Add categorical features back to the dataframe
     df_scaled[COLUMN_NAMES['VESSEL_ACTIVITY']] = df[COLUMN_NAMES['VESSEL_ACTIVITY']]
     df_scaled[COLUMN_NAMES['LOAD_TYPE']] = df[COLUMN_NAMES['LOAD_TYPE']]
-    
-    # Retain the original 'REPORT_DATE' and 'VESSEL_NAME' for reporting purposes
-    df_scaled[COLUMN_NAMES['REPORT_DATE']] = df[COLUMN_NAMES['REPORT_DATE']]
-    df_scaled[COLUMN_NAMES['VESSEL_NAME']] = df[COLUMN_NAMES['VESSEL_NAME']]
-    
-    # Provide the shape of the scaled numeric and encoded categorical features
+
+    # Ensure all features are included
     st.write(f"Shape of features after scaling: {df_scaled.shape}")
     
     return df_scaled
 
 # Detect anomalies using IsolationForest and LocalOutlierFactor
 def detect_anomalies(df):
-    # Combine numeric and encoded categorical features for anomaly detection
+    # Select features for anomaly detection (both numeric and categorical)
     features = [
-        COLUMN_NAMES['ME_CONSUMPTION'], COLUMN_NAMES['OBSERVERD_DISTANCE'], COLUMN_NAMES['SPEED'], 
-        COLUMN_NAMES['DISPLACEMENT'], COLUMN_NAMES['STEAMING_TIME_HRS'], COLUMN_NAMES['WINDFORCE'], 
+        COLUMN_NAMES['ME_CONSUMPTION'], COLUMN_NAMES['OBSERVERD_DISTANCE'], 
+        COLUMN_NAMES['SPEED'], COLUMN_NAMES['DISPLACEMENT'], 
+        COLUMN_NAMES['STEAMING_TIME_HRS'], COLUMN_NAMES['WINDFORCE'], 
         COLUMN_NAMES['VESSEL_ACTIVITY'], COLUMN_NAMES['LOAD_TYPE']
     ]
-    
-    # Ensure all features are numeric
-    df[features] = df[features].apply(pd.to_numeric, errors='coerce')
-    df = df.dropna(subset=features)  # Drop rows with missing values after scaling
     
     # Check the shape of the features to be used in anomaly detection
     st.write(f"Shape of features for anomaly detection: {df[features].shape}")
@@ -123,59 +112,6 @@ def detect_anomalies(df):
     
     return anomaly_results
 
-# Detect drift in continuous and categorical features using statistical tests
-def detect_drift(train_df, test_df):
-    continuous_features = [
-        COLUMN_NAMES['ME_CONSUMPTION'], COLUMN_NAMES['OBSERVERD_DISTANCE'], 
-        COLUMN_NAMES['SPEED'], COLUMN_NAMES['DISPLACEMENT'], 
-        COLUMN_NAMES['STEAMING_TIME_HRS'], COLUMN_NAMES['WINDFORCE']
-    ]
-    categorical_features = [COLUMN_NAMES['VESSEL_ACTIVITY'], COLUMN_NAMES['LOAD_TYPE']]
-    
-    drift_detected = {}
-    
-    # KS test for continuous features
-    for feature in continuous_features:
-        ks_stat, p_value = ks_2samp(train_df[feature], test_df[feature])
-        drift_detected[feature] = p_value < 0.05  # Drift if p-value is below threshold
-    
-    # Chi-Square test for categorical features
-    for feature in categorical_features:
-        chi_stat, p_value = chisquare(train_df[feature].value_counts(), test_df[feature].value_counts())
-        drift_detected[feature] = p_value < 0.05
-    
-    return drift_detected
-
-# Detect change points in time series data using the Pelt algorithm
-def detect_change_points(df):
-    features = ['ME_CONSUMPTION', 'OBSERVERD_DISTANCE', 'SPEED']
-    change_points = {}
-    
-    for feature in features:
-        algo = rpt.Pelt(model="rbf").fit(df[feature].values)
-        penalty = np.std(df[feature].values)
-        change_points[feature] = algo.predict(pen=penalty)
-    
-    return change_points
-
-# Validate relationships using mutual information for continuous and categorical variables
-def validate_relationships(df):
-    continuous_features = ['ME_CONSUMPTION', 'SPEED', 'DISPLACEMENT', 'STEAMING_TIME_HRS']
-    mutual_info = mutual_info_regression(df[continuous_features], df['ME_CONSUMPTION'])
-    
-    relationships = {}
-    for i, feature in enumerate(continuous_features[1:]):
-        relationships[feature] = mutual_info[i]
-    
-    # Mutual information for categorical features
-    categorical_features = ['VESSEL_ACTIVITY', 'LOAD_TYPE']
-    cat_mutual_info = mutual_info_classif(df[categorical_features], df['ME_CONSUMPTION'])
-    
-    for i, feature in enumerate(categorical_features):
-        relationships[feature] = cat_mutual_info[i]
-    
-    return relationships
-
 # Main function to run advanced validations on the vessel data
 def run_advanced_validation(engine, vessel_name, date_filter):
     df = load_data(vessel_name, date_filter)
@@ -190,10 +126,7 @@ def run_advanced_validation(engine, vessel_name, date_filter):
     test_df = df_processed[df_processed[COLUMN_NAMES['REPORT_DATE']] >= df_processed[COLUMN_NAMES['REPORT_DATE']].max() - pd.Timedelta(days=90)]
     
     results = {
-        'anomalies': detect_anomalies(test_df),  # Return user-friendly anomaly results
-        'drift': detect_drift(train_df, test_df),
-        'change_points': detect_change_points(test_df),
-        'relationships': validate_relationships(test_df)
+        'anomalies': detect_anomalies(test_df)  # Return user-friendly anomaly results
     }
     
     return results
