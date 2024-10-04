@@ -3,9 +3,11 @@ import numpy as np
 from sklearn.ensemble import IsolationForest
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.preprocessing import RobustScaler
+from scipy.stats import ks_2samp, chi2_contingency
 from sqlalchemy.exc import SQLAlchemyError
 import streamlit as st
 from database import get_db_engine
+from datetime import datetime, timedelta
 
 # Configuration for column names
 COLUMN_NAMES = {
@@ -104,18 +106,63 @@ def detect_anomalies(df):
     lof = LocalOutlierFactor(n_neighbors=20, contamination=0.1)
     iso_forest = IsolationForest(contamination=0.1, random_state=42)
     
-    # For LOF, we only get the labels via fit_predict
     lof_anomalies = lof.fit_predict(df[features])
     iso_forest_anomalies = iso_forest.fit_predict(df[features])
     
     combined_anomalies = (lof_anomalies == -1).astype(int) + (iso_forest_anomalies == -1).astype(int)
     anomalies = df[combined_anomalies > 1]  # Keep only anomalies detected by both methods
 
+    # Check if anomalies are found
+    st.write(f"Anomalies detected: {len(anomalies)}")
+    
     # Prepare the results with vessel name, report date, and the detected discrepancy
     anomaly_results = anomalies[[COLUMN_NAMES['VESSEL_NAME'], COLUMN_NAMES['REPORT_DATE']]].copy()
     anomaly_results['Discrepancy'] = 'Anomaly detected by both IsolationForest and LocalOutlierFactor'
     
     return anomaly_results
+
+# Detect data drift between train and test sets
+def detect_data_drift(train_df, test_df):
+    drift_results = []
+    numeric_columns = [
+        COLUMN_NAMES['ME_CONSUMPTION'], COLUMN_NAMES['OBSERVERD_DISTANCE'], 
+        COLUMN_NAMES['SPEED'], COLUMN_NAMES['DISPLACEMENT'], 
+        COLUMN_NAMES['STEAMING_TIME_HRS'], COLUMN_NAMES['WINDFORCE']
+    ]
+    categorical_columns = [COLUMN_NAMES['VESSEL_ACTIVITY'], COLUMN_NAMES['LOAD_TYPE']]
+    
+    for col in numeric_columns:
+        # Perform Kolmogorov-Smirnov test
+        stat, p_value = ks_2samp(train_df[col], test_df[col])
+        drift_detected = p_value < 0.05  # Significance level of 0.05
+        drift_results.append({
+            'Feature': col,
+            'Statistic': stat,
+            'P-value': p_value,
+            'Drift Detected': drift_detected
+        })
+    
+    for col in categorical_columns:
+        # Create contingency table
+        contingency_table = pd.crosstab(train_df[col], test_df[col])
+        # Perform Chi-squared test
+        chi2, p_value, dof, ex = chi2_contingency(contingency_table)
+        drift_detected = p_value < 0.05
+        drift_results.append({
+            'Feature': col,
+            'Statistic': chi2,
+            'P-value': p_value,
+            'Drift Detected': drift_detected
+        })
+    
+    drift_df = pd.DataFrame(drift_results)
+    st.write("Data Drift Detection Results:")
+    st.write(drift_df)
+
+    # Collect features where drift is detected
+    drifted_features = drift_df[drift_df['Drift Detected']]['Feature'].tolist()
+
+    return drift_df, drifted_features
 
 # Main function to run advanced validations on the vessel data
 def run_advanced_validation(engine, vessel_name, date_filter):
@@ -133,23 +180,39 @@ def run_advanced_validation(engine, vessel_name, date_filter):
     train_df = df_processed[df_processed[COLUMN_NAMES['REPORT_DATE']] < cutoff_date]
     test_df = df_processed[df_processed[COLUMN_NAMES['REPORT_DATE']] >= cutoff_date]
     
+    if train_df.empty or test_df.empty:
+        raise ValueError("Not enough data to perform data drift detection.")
+    
+    # Perform data drift detection
+    drift_df, drifted_features = detect_data_drift(train_df, test_df)
+    
+    # Detect anomalies in test set
+    anomalies = detect_anomalies(test_df)
+    
     results = {
-        'anomalies': detect_anomalies(test_df)  # Return user-friendly anomaly results
+        'anomalies': anomalies,
+        'data_drift': drift_df
     }
     
     return results
 
 # Example of how to use the advanced validation functionality
 if __name__ == "__main__":
-    from datetime import datetime, timedelta
     from database import get_db_engine  # Import the function to get the engine
 
     engine = get_db_engine()  # Get the database engine
     date_filter = datetime.now() - timedelta(days=180)  # Last 6 months
-    vessel_name = "Example_Vessel"  # Replace with actual vessel name
+    vessel_name = "ACE ETERNITY"  # Replace with actual vessel name
 
     try:
         results = run_advanced_validation(engine, vessel_name, date_filter)
-        st.write(pd.DataFrame(results['anomalies']))  # Display anomalies
+        st.write(f"Advanced Validation Results for {vessel_name}:")
+
+        st.write("Anomalies:")
+        st.write(results['anomalies'])  # Display anomalies
+
+        st.write("Data Drift Detection Results:")
+        st.write(results['data_drift'])  # Display data drift results
+
     except ValueError as e:
         st.error(str(e))
