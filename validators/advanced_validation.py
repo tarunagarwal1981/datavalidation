@@ -21,7 +21,7 @@ COLUMN_NAMES = {
     'STEAMING_TIME_HRS': 'STEAMING_TIME_HRS',
     'WINDFORCE': 'WINDFORCE',
     'VESSEL_ACTIVITY': 'VESSEL_ACTIVITY',
-    'LOAD_TYPE': 'LOAD_TYPE'  # Double-check these names against your table schema
+    'LOAD_TYPE': 'LOAD_TYPE'
 }
 
 # Fetching vessel data from the sf_consumption_logs table
@@ -45,7 +45,8 @@ def load_data(vessel_name, date_filter):
 
 # Preprocess data: handle missing values and scale numeric columns
 def preprocess_data(df):
-    df.fillna(df.median(), inplace=True)
+    # Handling missing values
+    df.fillna(df.median(numeric_only=True), inplace=True)  # Only for numeric columns
     
     # Encoding categorical variables
     df[COLUMN_NAMES['VESSEL_ACTIVITY']] = pd.Categorical(df[COLUMN_NAMES['VESSEL_ACTIVITY']]).codes
@@ -57,6 +58,14 @@ def preprocess_data(df):
         COLUMN_NAMES['SPEED'], COLUMN_NAMES['DISPLACEMENT'], 
         COLUMN_NAMES['STEAMING_TIME_HRS'], COLUMN_NAMES['WINDFORCE']
     ]
+    
+    # Ensure columns are numeric
+    df[numeric_columns] = df[numeric_columns].apply(pd.to_numeric, errors='coerce')
+    
+    # Replace any remaining non-numeric values with NaN and fill with median
+    df[numeric_columns] = df[numeric_columns].fillna(df[numeric_columns].median())
+
+    # Scale the numeric columns
     scaler = RobustScaler()
     df[numeric_columns] = scaler.fit_transform(df[numeric_columns])
     
@@ -71,7 +80,7 @@ def detect_anomalies(df):
     ]
     
     # Scale features
-    scaled_features = RobustScaler().fit_transform(df[features])
+    scaled_features = df[features]  # Ensure only numeric data goes to the scaler
     
     lof = LocalOutlierFactor(n_neighbors=20, contamination=0.1)
     iso_forest = IsolationForest(contamination=0.1, random_state=42)
