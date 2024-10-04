@@ -23,7 +23,7 @@ COLUMN_NAMES = {
 
 # Fetching vessel data from sf_consumption_logs
 @st.cache_data
-def load_data(engine, vessel_name, date_filter):
+def load_data(_engine, vessel_name, date_filter):
     try:
         query = f"""
         SELECT {', '.join(f'"{col}"' for col in COLUMN_NAMES.values())}
@@ -32,7 +32,7 @@ def load_data(engine, vessel_name, date_filter):
         AND "{COLUMN_NAMES['REPORT_DATE']}" >= %s
         ORDER BY "{COLUMN_NAMES['REPORT_DATE']}"
         """
-        df = pd.read_sql_query(query, engine, params=(vessel_name, date_filter))
+        df = pd.read_sql_query(query, _engine, params=(vessel_name, date_filter))
         df[COLUMN_NAMES['REPORT_DATE']] = pd.to_datetime(df[COLUMN_NAMES['REPORT_DATE']])
         return df
     except SQLAlchemyError as e:
@@ -76,8 +76,8 @@ def preprocess_data(df):
     df_scaled = pd.DataFrame(scaled_numeric_features, columns=numeric_columns)
     
     # Add categorical features back to the dataframe
-    df_scaled[COLUMN_NAMES['VESSEL_ACTIVITY']] = df[COLUMN_NAMES['VESSEL_ACTIVITY']]
-    df_scaled[COLUMN_NAMES['LOAD_TYPE']] = df[COLUMN_NAMES['LOAD_TYPE']]
+    df_scaled[COLUMN_NAMES['VESSEL_ACTIVITY']] = df[COLUMN_NAMES['VESSEL_ACTIVITY']].values
+    df_scaled[COLUMN_NAMES['LOAD_TYPE']] = df[COLUMN_NAMES['LOAD_TYPE']].values
     
     # Add REPORT_DATE and VESSEL_NAME back to the dataframe
     df_scaled[COLUMN_NAMES['REPORT_DATE']] = df[COLUMN_NAMES['REPORT_DATE']].values
