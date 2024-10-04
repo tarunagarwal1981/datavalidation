@@ -73,6 +73,8 @@ def detect_anomalies(df):
         st.warning("Not enough data for anomaly detection.")
         return pd.DataFrame(columns=[COLUMN_NAMES['VESSEL_NAME'], COLUMN_NAMES['REPORT_DATE'], 'Discrepancy'])
 
+    anomalies = pd.DataFrame()  # Initialize an empty DataFrame for anomalies
+
     try:
         iso_forest = IsolationForest(contamination=0.1, random_state=42)
         iso_forest_anomalies = iso_forest.fit_predict(df[features])
@@ -81,7 +83,7 @@ def detect_anomalies(df):
         lof_anomalies = lof.fit_predict(df[features])
 
         combined_anomalies = np.logical_and(iso_forest_anomalies == -1, lof_anomalies == -1)
-        anomalies = df[combined_anomalies]
+        anomalies = df[combined_anomalies]  # Update the 'anomalies' DataFrame if anomalies are detected
 
         if anomalies.empty:
             st.info("No anomalies detected.")
