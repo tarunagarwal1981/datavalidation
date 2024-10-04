@@ -23,7 +23,6 @@ COLUMN_NAMES = {
     'LOAD_TYPE': 'LOAD_TYPE'
 }
 
-# Fetching vessel data from sf_consumption_logs
 @st.cache_data
 def load_data(_engine, vessel_name, date_filter):
     try:
@@ -41,7 +40,6 @@ def load_data(_engine, vessel_name, date_filter):
         st.error(f"Error fetching data for {vessel_name}: {str(e)}")
         return pd.DataFrame()
 
-# Preprocess data: handle missing values and scale numeric columns
 def preprocess_data(df):
     numeric_columns = [
         COLUMN_NAMES['ME_CONSUMPTION'], COLUMN_NAMES['OBSERVERD_DISTANCE'],
@@ -49,27 +47,20 @@ def preprocess_data(df):
         COLUMN_NAMES['STEAMING_TIME_HRS'], COLUMN_NAMES['WINDFORCE']
     ]
 
-    # Convert to numeric and handle invalid entries
     df[numeric_columns] = df[numeric_columns].apply(pd.to_numeric, errors='coerce')
-
-    # Fill missing values for numeric columns
     df[numeric_columns] = df[numeric_columns].fillna(df[numeric_columns].median())
 
-    # Fill missing categorical values with mode
     categorical_columns = [COLUMN_NAMES['VESSEL_ACTIVITY'], COLUMN_NAMES['LOAD_TYPE']]
     df[categorical_columns] = df[categorical_columns].apply(lambda col: col.fillna(col.mode()[0]))
 
-    # Encoding categorical variables
     df[COLUMN_NAMES['VESSEL_ACTIVITY']] = pd.Categorical(df[COLUMN_NAMES['VESSEL_ACTIVITY']]).codes
     df[COLUMN_NAMES['LOAD_TYPE']] = pd.Categorical(df[COLUMN_NAMES['LOAD_TYPE']]).codes
 
-    # Scaling numeric columns
     scaler = RobustScaler()
     df[numeric_columns] = scaler.fit_transform(df[numeric_columns])
 
     return df
 
-# Detect anomalies using Isolation Forest and Local Outlier Factor
 def detect_anomalies(df):
     features = [
         COLUMN_NAMES['ME_CONSUMPTION'], COLUMN_NAMES['OBSERVERD_DISTANCE'],
@@ -78,35 +69,24 @@ def detect_anomalies(df):
         COLUMN_NAMES['VESSEL_ACTIVITY'], COLUMN_NAMES['LOAD_TYPE']
     ]
 
-    # Ensure there are enough records for anomaly detection
     if len(df) < 5:
-        st.write("Not enough data for anomaly detection.")
+        st.warning("Not enough data for anomaly detection.")
         return pd.DataFrame(columns=[COLUMN_NAMES['VESSEL_NAME'], COLUMN_NAMES['REPORT_DATE'], 'Discrepancy'])
 
     try:
-        # Apply Isolation Forest
         iso_forest = IsolationForest(contamination=0.1, random_state=42)
         iso_forest_anomalies = iso_forest.fit_predict(df[features])
 
-        # Apply Local Outlier Factor (LOF)
         lof = LocalOutlierFactor(n_neighbors=20, contamination=0.1)
         lof_anomalies = lof.fit_predict(df[features])
 
-        # Check if shapes match
-        if iso_forest_anomalies.shape != lof_anomalies.shape:
-            st.error(f"Shape mismatch between LOF and Isolation Forest: {iso_forest_anomalies.shape} vs {lof_anomalies.shape}")
-            return pd.DataFrame(columns=[COLUMN_NAMES['VESSEL_NAME'], COLUMN_NAMES['REPORT_DATE'], 'Discrepancy'])
-
-        # Combine results: anomalies detected by both methods
         combined_anomalies = np.logical_and(iso_forest_anomalies == -1, lof_anomalies == -1)
         anomalies = df[combined_anomalies]
 
-        # Prepare the results
         if anomalies.empty:
-            st.write("No anomalies detected.")
+            st.info("No anomalies detected.")
             return pd.DataFrame(columns=[COLUMN_NAMES['VESSEL_NAME'], COLUMN_NAMES['REPORT_DATE'], 'Discrepancy'])
 
-        # If anomalies are found, return the discrepancy
         anomaly_results = anomalies[[COLUMN_NAMES['VESSEL_NAME'], COLUMN_NAMES['REPORT_DATE']]].copy()
         anomaly_results['Discrepancy'] = 'Anomaly detected'
         return anomaly_results
@@ -115,7 +95,6 @@ def detect_anomalies(df):
         st.error(f"Error during anomaly detection: {e}")
         return pd.DataFrame(columns=[COLUMN_NAMES['VESSEL_NAME'], COLUMN_NAMES['REPORT_DATE'], 'Discrepancy'])
 
-# Detect data drift using KS Test for numeric columns and chi-squared test for categorical columns
 def detect_data_drift(train_df, test_df):
     drift_results = []
     numeric_columns = [
@@ -145,17 +124,14 @@ def detect_data_drift(train_df, test_df):
                     'Discrepancy': f'Data drift detected in {col}'
                 })
 
-    if drift_results:
-        return pd.DataFrame(drift_results)
-    else:
-        return pd.DataFrame(columns=['VESSEL_NAME', 'REPORT_DATE', 'Discrepancy'])
+    return pd.DataFrame(drift_results) if drift_results else pd.DataFrame(columns=['VESSEL_NAME', 'REPORT_DATE', 'Discrepancy'])
 
-# Main function to run advanced validation on vessel data
 def run_advanced_validation(engine, vessel_name, date_filter):
     df = load_data(engine, vessel_name, date_filter)
 
     if df.empty:
-        raise ValueError(f"No data available for vessel {vessel_name}")
+        st.warning(f"No data available for vessel {vessel_name}")
+        return pd.DataFrame(columns=['VESSEL_NAME', 'REPORT_DATE', 'Discrepancy'])
 
     df_processed = preprocess_data(df)
 
@@ -166,7 +142,8 @@ def run_advanced_validation(engine, vessel_name, date_filter):
     test_df = df_processed[df_processed[COLUMN_NAMES['REPORT_DATE']] >= cutoff_date]
 
     if len(train_df) < 5 or len(test_df) < 5:
-        raise ValueError("Not enough data in training or testing set for drift detection.")
+        st.warning("Not enough data in training or testing set for drift detection.")
+        return pd.DataFrame(columns=['VESSEL_NAME', 'REPORT_DATE', 'Discrepancy'])
 
     drift_df = detect_data_drift(train_df, test_df)
     anomalies_df = detect_anomalies(test_df)
@@ -174,25 +151,39 @@ def run_advanced_validation(engine, vessel_name, date_filter):
     combined_results = pd.concat([anomalies_df, drift_df], ignore_index=True)
 
     if combined_results.empty:
-        st.write("No discrepancies detected.")
-        final_results = pd.DataFrame(columns=['VESSEL_NAME', 'REPORT_DATE', 'Discrepancy'])
+        st.info("No discrepancies detected.")
+        return pd.DataFrame(columns=['VESSEL_NAME', 'REPORT_DATE', 'Discrepancy'])
     else:
-        final_results = combined_results[['VESSEL_NAME', 'REPORT_DATE', 'Discrepancy']]
+        return combined_results[['VESSEL_NAME', 'REPORT_DATE', 'Discrepancy']]
 
-    return final_results
+# Streamlit app
+st.title('Advanced Vessel Data Validation')
 
-# Example of how to use the advanced validation functionality
-if __name__ == "__main__":
-    engine = get_db_engine()  # Get the database engine
-    date_filter = datetime.now() - timedelta(days=180)  # Last 6 months
-    vessel_name = "ACE ETERNITY"  # Replace with actual vessel name
+engine = get_db_engine()
+date_filter = datetime.now() - timedelta(days=180)  # Last 6 months
 
+vessel_name = st.text_input("Enter Vessel Name", "ACE ETERNITY")
+
+if st.button('Run Advanced Validation'):
     try:
-        final_results = run_advanced_validation(engine, vessel_name, date_filter)
+        with st.spinner('Running advanced validation...'):
+            final_results = run_advanced_validation(engine, vessel_name, date_filter)
+        
         st.write(f"Advanced Validation Results for {vessel_name}:")
         if final_results.empty:
-            st.write("No discrepancies detected.")
+            st.success("No discrepancies detected.")
         else:
-            st.write(final_results)  # Display the final results table
-    except ValueError as e:
+            st.dataframe(final_results)
+            
+        # Option to download results
+        csv = final_results.to_csv(index=False)
+        st.download_button(
+            label="Download results as CSV",
+            data=csv,
+            file_name=f"{vessel_name}_validation_results.csv",
+            mime="text/csv"
+        )
+    except Exception as e:
         st.error(f"An error occurred: {str(e)}")
+
+st.sidebar.info("This app performs advanced validation on vessel data, including anomaly detection and data drift analysis.")
