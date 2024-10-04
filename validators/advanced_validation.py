@@ -14,7 +14,7 @@ import streamlit as st
 COLUMN_NAMES = {
     'VESSEL_NAME': 'VESSEL_NAME',
     'REPORT_DATE': 'REPORT_DATE',
-    'ME_CONSUMPTION': 'ME_CONSUMPTION',  
+    'ME_CONSUMPTION': 'ME_CONSUMPTION',
     'OBSERVERD_DISTANCE': 'OBSERVERD_DISTANCE',
     'SPEED': 'SPEED',
     'DISPLACEMENT': 'DISPLACEMENT',
@@ -55,7 +55,10 @@ def preprocess_data(df):
     # Ensure columns are numeric and handle invalid entries
     for col in numeric_columns:
         df[col] = pd.to_numeric(df[col], errors='coerce')  # Convert invalid numbers to NaN
-
+    
+    # Debugging: Check if any columns have NaN values
+    st.write(f"Missing values per column:\n{df[numeric_columns].isna().sum()}")
+    
     # Fill missing numeric values with column medians
     df[numeric_columns] = df[numeric_columns].fillna(df[numeric_columns].median())
     
@@ -65,6 +68,10 @@ def preprocess_data(df):
 
     # Scale the numeric columns
     scaler = RobustScaler()
+    
+    # Debugging: Check if all numeric columns have the same shape
+    st.write(f"Shape of numeric columns before scaling: {[df[col].shape for col in numeric_columns]}")
+    
     df[numeric_columns] = scaler.fit_transform(df[numeric_columns])
     
     return df
@@ -82,6 +89,9 @@ def detect_anomalies(df):
     df = df.dropna()  # Drop any rows that still have NaN values after conversion
     
     scaled_features = df[features]  # Ensure only numeric data goes to the scaler
+    
+    # Debugging: Check the shape of the features to be scaled
+    st.write(f"Shape of features to be scaled: {scaled_features.shape}")
     
     lof = LocalOutlierFactor(n_neighbors=20, contamination=0.1)
     iso_forest = IsolationForest(contamination=0.1, random_state=42)
