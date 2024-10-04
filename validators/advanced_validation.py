@@ -87,12 +87,12 @@ def detect_anomalies(df):
             st.info("No anomalies detected.")
             return pd.DataFrame(columns=[COLUMN_NAMES['VESSEL_NAME'], COLUMN_NAMES['REPORT_DATE'], 'Discrepancy'])
 
-        anomaly_results = anomalies[[COLUMN_NAMES['VESSEL_NAME'], COLUMN_NAMES['REPORT_DATE']]].copy()
-        anomaly_results['Discrepancy'] = 'Anomaly detected'
-        return anomaly_results
+        anomalies_df = anomalies[[COLUMN_NAMES['VESSEL_NAME'], COLUMN_NAMES['REPORT_DATE']]].copy()
+        anomalies_df['Discrepancy'] = 'Anomaly detected'
+        return anomalies_df
 
     except Exception as e:
-        st.error(f"Error during anomaly detection: {e}")
+        st.error(f"Error during anomaly detection: {str(e)}")
         return pd.DataFrame(columns=[COLUMN_NAMES['VESSEL_NAME'], COLUMN_NAMES['REPORT_DATE'], 'Discrepancy'])
 
 def detect_data_drift(train_df, test_df):
