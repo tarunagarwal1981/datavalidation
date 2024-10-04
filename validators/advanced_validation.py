@@ -83,16 +83,16 @@ def detect_anomalies(df):
         st.write("Not enough data for anomaly detection.")
         return pd.DataFrame(columns=[COLUMN_NAMES['VESSEL_NAME'], COLUMN_NAMES['REPORT_DATE'], 'Discrepancy'])
 
-    lof = LocalOutlierFactor(n_neighbors=20, contamination=0.1)
-    iso_forest = IsolationForest(contamination=0.1, random_state=42)
-
     try:
+        lof = LocalOutlierFactor(n_neighbors=20, contamination=0.1)
+        iso_forest = IsolationForest(contamination=0.1, random_state=42)
+
         lof_anomalies = lof.fit_predict(df[features])
         iso_forest_anomalies = iso_forest.fit_predict(df[features])
 
         # Combine results: anomalies if detected by both methods
-        combined_anomalies = (lof_anomalies == -1).astype(int) + (iso_forest_anomalies == -1).astype(int)
-        anomalies = df[combined_anomalies > 1]
+        combined_anomalies = (lof_anomalies == -1) & (iso_forest_anomalies == -1)
+        anomalies = df[combined_anomalies]
 
         # Prepare the results
         if anomalies.empty:
