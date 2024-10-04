@@ -10,21 +10,21 @@ from sklearn.feature_selection import mutual_info_regression, mutual_info_classi
 from database import get_db_engine
 import streamlit as st
 
-# Configuration for column names
+# Configuration for column names based on your provided table schema
 COLUMN_NAMES = {
     'VESSEL_NAME': 'VESSEL_NAME',
     'REPORT_DATE': 'REPORT_DATE',
-    'ME_CONSUMPTION': 'ME_CONSUMPTION',
+    'ME_CONSUMPTION': 'ME_CONSUMPTION',  # Ensure that this column exists in your table
     'OBSERVERD_DISTANCE': 'OBSERVERD_DISTANCE',
     'SPEED': 'SPEED',
     'DISPLACEMENT': 'DISPLACEMENT',
     'STEAMING_TIME_HRS': 'STEAMING_TIME_HRS',
     'WINDFORCE': 'WINDFORCE',
     'VESSEL_ACTIVITY': 'VESSEL_ACTIVITY',
-    'LOAD_TYPE': 'LOAD_TYPE'
+    'LOAD_TYPE': 'LOAD_TYPE'  # Double-check these names against your table schema
 }
 
-# Fetching vessel data from sf_consumption_logs
+# Fetching vessel data from the sf_consumption_logs table
 @st.cache_data
 def load_data(vessel_name, date_filter):
     engine = get_db_engine()
@@ -52,7 +52,11 @@ def preprocess_data(df):
     df[COLUMN_NAMES['LOAD_TYPE']] = pd.Categorical(df[COLUMN_NAMES['LOAD_TYPE']]).codes
     
     # Normalize numeric columns
-    numeric_columns = ['ME_CONSUMPTION', 'OBSERVERD_DISTANCE', 'SPEED', 'DISPLACEMENT', 'STEAMING_TIME_HRS', 'WINDFORCE']
+    numeric_columns = [
+        COLUMN_NAMES['ME_CONSUMPTION'], COLUMN_NAMES['OBSERVERD_DISTANCE'], 
+        COLUMN_NAMES['SPEED'], COLUMN_NAMES['DISPLACEMENT'], 
+        COLUMN_NAMES['STEAMING_TIME_HRS'], COLUMN_NAMES['WINDFORCE']
+    ]
     scaler = RobustScaler()
     df[numeric_columns] = scaler.fit_transform(df[numeric_columns])
     
@@ -60,7 +64,11 @@ def preprocess_data(df):
 
 # Detect anomalies using IsolationForest and LocalOutlierFactor
 def detect_anomalies(df):
-    features = ['ME_CONSUMPTION', 'OBSERVERD_DISTANCE', 'SPEED', 'DISPLACEMENT', 'STEAMING_TIME_HRS', 'WINDFORCE', 'VESSEL_ACTIVITY', 'LOAD_TYPE']
+    features = [
+        COLUMN_NAMES['ME_CONSUMPTION'], COLUMN_NAMES['OBSERVERD_DISTANCE'], COLUMN_NAMES['SPEED'], 
+        COLUMN_NAMES['DISPLACEMENT'], COLUMN_NAMES['STEAMING_TIME_HRS'], COLUMN_NAMES['WINDFORCE'], 
+        COLUMN_NAMES['VESSEL_ACTIVITY'], COLUMN_NAMES['LOAD_TYPE']
+    ]
     
     # Scale features
     scaled_features = RobustScaler().fit_transform(df[features])
@@ -78,8 +86,11 @@ def detect_anomalies(df):
 
 # Detect drift in continuous and categorical features using statistical tests
 def detect_drift(train_df, test_df):
-    continuous_features = ['ME_CONSUMPTION', 'OBSERVERD_DISTANCE', 'SPEED', 'DISPLACEMENT', 'STEAMING_TIME_HRS', 'WINDFORCE']
-    categorical_features = ['VESSEL_ACTIVITY', 'LOAD_TYPE']
+    continuous_features = [
+        COLUMN_NAMES['ME_CONSUMPTION'], COLUMN_NAMES['OBSERVERD_DISTANCE'], COLUMN_NAMES['SPEED'], 
+        COLUMN_NAMES['DISPLACEMENT'], COLUMN_NAMES['STEAMING_TIME_HRS'], COLUMN_NAMES['WINDFORCE']
+    ]
+    categorical_features = [COLUMN_NAMES['VESSEL_ACTIVITY'], COLUMN_NAMES['LOAD_TYPE']]
     
     drift_detected = {}
     
@@ -97,7 +108,7 @@ def detect_drift(train_df, test_df):
 
 # Detect change points in time series data using the Pelt algorithm
 def detect_change_points(df):
-    features = ['ME_CONSUMPTION', 'OBSERVERD_DISTANCE', 'SPEED']
+    features = [COLUMN_NAMES['ME_CONSUMPTION'], COLUMN_NAMES['OBSERVERD_DISTANCE'], COLUMN_NAMES['SPEED']]
     change_points = {}
     
     for feature in features:
@@ -109,16 +120,16 @@ def detect_change_points(df):
 
 # Validate relationships using mutual information for continuous and categorical variables
 def validate_relationships(df):
-    continuous_features = ['ME_CONSUMPTION', 'SPEED', 'DISPLACEMENT', 'STEAMING_TIME_HRS']
-    mutual_info = mutual_info_regression(df[continuous_features], df['ME_CONSUMPTION'])
+    continuous_features = [COLUMN_NAMES['ME_CONSUMPTION'], COLUMN_NAMES['SPEED'], COLUMN_NAMES['DISPLACEMENT'], COLUMN_NAMES['STEAMING_TIME_HRS']]
+    mutual_info = mutual_info_regression(df[continuous_features], df[COLUMN_NAMES['ME_CONSUMPTION']])
     
     relationships = {}
     for i, feature in enumerate(continuous_features[1:]):
         relationships[feature] = mutual_info[i]
     
     # Mutual information for categorical features
-    categorical_features = ['VESSEL_ACTIVITY', 'LOAD_TYPE']
-    cat_mutual_info = mutual_info_classif(df[categorical_features], df['ME_CONSUMPTION'])
+    categorical_features = [COLUMN_NAMES['VESSEL_ACTIVITY'], COLUMN_NAMES['LOAD_TYPE']]
+    cat_mutual_info = mutual_info_classif(df[categorical_features], df[COLUMN_NAMES['ME_CONSUMPTION']])
     
     for i, feature in enumerate(categorical_features):
         relationships[feature] = cat_mutual_info[i]
@@ -126,29 +137,6 @@ def validate_relationships(df):
     return relationships
 
 # Main function to run advanced validations on the vessel data
-# In advanced_validation.py
-
-# ... (keep all the imports and other functions as they are)
-
-@st.cache_data
-def load_data(_engine, vessel_name, date_filter):
-    try:
-        query = f"""
-        SELECT {', '.join(f'"{col}"' for col in COLUMN_NAMES.values())}
-        FROM sf_consumption_logs
-        WHERE "{COLUMN_NAMES['VESSEL_NAME']}" = %s
-        AND "{COLUMN_NAMES['REPORT_DATE']}" >= %s
-        ORDER BY "{COLUMN_NAMES['REPORT_DATE']}"
-        """
-        df = pd.read_sql_query(query, _engine, params=(vessel_name, date_filter))
-        df[COLUMN_NAMES['REPORT_DATE']] = pd.to_datetime(df[COLUMN_NAMES['REPORT_DATE']])
-        return df
-    except SQLAlchemyError as e:
-        st.error(f"Error fetching data for {vessel_name}: {str(e)}")
-        return pd.DataFrame()
-
-# ... (keep all other functions as they are)
-
 def run_advanced_validation(engine, vessel_name, date_filter):
     df = load_data(engine, vessel_name, date_filter)
     
@@ -169,7 +157,6 @@ def run_advanced_validation(engine, vessel_name, date_filter):
     }
     
     return results
-
 
 
 # Example of how to use the advanced validation functionality
