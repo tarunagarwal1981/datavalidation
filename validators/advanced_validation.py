@@ -55,24 +55,24 @@ def run_advanced_validation(engine, vessel_name, date_filter):
 
     for index, row in anomalies.iterrows():
         validation_results.append({
-            'Vessel Name': vessel_name,
+            'Vessel Name': str(vessel_name),
             'Anomaly Name': 'Anomaly Detected',
-            'Feature': row.to_dict()
+            'Feature': {k: str(v) for k, v in row.to_dict().items()}  # Convert all values to strings to avoid type issues
         })
     for feature, has_drift in drift.items():
         if has_drift:
             validation_results.append({
-                'Vessel Name': vessel_name,
+                'Vessel Name': str(vessel_name),
                 'Anomaly Name': 'Drift Detected',
-                'Feature': feature
+                'Feature': str(feature)  # Convert feature to string
             })
     for feature, points in change_points.items():
         if points:
             validation_results.append({
-                'Vessel Name': vessel_name,
+                'Vessel Name': str(vessel_name),
                 'Anomaly Name': 'Change Point Detected',
-                'Feature': feature,
-                'Value': points
+                'Feature': str(feature),
+                'Value': str(points)  # Convert points to string to avoid type issues
             })
     return pd.DataFrame(validation_results)
 
