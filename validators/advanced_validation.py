@@ -25,7 +25,7 @@ def run_advanced_validation(engine, vessel_name, date_filter):
     # Fetch data for the vessel
     query = """
     SELECT * FROM sf_consumption_logs
-    WHERE {} = %s AND {} >= %s;
+    WHERE "{}" = %s AND "{}" >= %s;
     """.format(COLUMN_NAMES['VESSEL_NAME'], COLUMN_NAMES['REPORT_DATE'])
     df = pd.read_sql_query(query, engine, params=(vessel_name, date_filter))
 
