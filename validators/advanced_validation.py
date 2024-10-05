@@ -60,6 +60,8 @@ def run_advanced_validation(engine, vessel_name, date_filter):
     }
 
 def detect_anomalies(df, n_neighbors=20):
+    # Handle missing values by dropping rows with NaN values
+    df = df.dropna()
     features = [
         COLUMN_NAMES['ME_CONSUMPTION'], COLUMN_NAMES['OBSERVERD_DISTANCE'], COLUMN_NAMES['SPEED'],
         COLUMN_NAMES['DISPLACEMENT'], COLUMN_NAMES['STEAMING_TIME_HRS'], COLUMN_NAMES['WINDFORCE'],
@@ -117,6 +119,12 @@ def validate_relationships(df):
     return relationships
 
 def preprocess_data(df):
+    # Handle missing values by imputing or dropping
+    df = df.dropna(subset=[
+        COLUMN_NAMES['ME_CONSUMPTION'], COLUMN_NAMES['OBSERVERD_DISTANCE'], COLUMN_NAMES['SPEED'],
+        COLUMN_NAMES['DISPLACEMENT'], COLUMN_NAMES['STEAMING_TIME_HRS'], COLUMN_NAMES['WINDFORCE'],
+        COLUMN_NAMES['VESSEL_ACTIVITY'], COLUMN_NAMES['LOAD_TYPE']
+    ])
     df[COLUMN_NAMES['VESSEL_ACTIVITY']] = pd.Categorical(df[COLUMN_NAMES['VESSEL_ACTIVITY']]).codes
     df[COLUMN_NAMES['LOAD_TYPE']] = pd.Categorical(df[COLUMN_NAMES['LOAD_TYPE']]).codes
 
