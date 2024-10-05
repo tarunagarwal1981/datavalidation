@@ -1,3 +1,8 @@
+import streamlit as st
+
+# Set page configuration must be the first Streamlit command
+st.set_page_config(layout="wide")
+
 import pandas as pd
 import numpy as np
 from sklearn.ensemble import IsolationForest
@@ -5,7 +10,6 @@ from sklearn.neighbors import LocalOutlierFactor
 from sklearn.preprocessing import RobustScaler
 from scipy.stats import ks_2samp, chi2_contingency
 from sqlalchemy.exc import SQLAlchemyError
-import streamlit as st
 from database import get_db_engine
 from datetime import datetime, timedelta
 
