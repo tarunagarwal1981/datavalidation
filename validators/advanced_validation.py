@@ -22,6 +22,7 @@ COLUMN_NAMES = {
 }
 
 def run_advanced_validation(engine, vessel_name, date_filter):
+    validation_results = []
     # Fetch data for the vessel
     query = """
     SELECT * FROM sf_consumption_logs
@@ -52,12 +53,28 @@ def run_advanced_validation(engine, vessel_name, date_filter):
     # Feature Relationships using Mutual Information
     relationships = validate_relationships(train_df)
 
-    return {
-        'anomalies': anomalies,
-        'drift': drift,
-        'change_points': change_points,
-        'relationships': relationships
-    }
+    for index, row in anomalies.iterrows():
+        validation_results.append({
+            'Vessel Name': vessel_name,
+            'Anomaly Name': 'Anomaly Detected',
+            'Feature': row.to_dict()
+        })
+    for feature, has_drift in drift.items():
+        if has_drift:
+            validation_results.append({
+                'Vessel Name': vessel_name,
+                'Anomaly Name': 'Drift Detected',
+                'Feature': feature
+            })
+    for feature, points in change_points.items():
+        if points:
+            validation_results.append({
+                'Vessel Name': vessel_name,
+                'Anomaly Name': 'Change Point Detected',
+                'Feature': feature,
+                'Value': points
+            })
+    return pd.DataFrame(validation_results)
 
 def detect_anomalies(df, n_neighbors=20):
     # Handle missing values by dropping rows with NaN values
@@ -85,7 +102,7 @@ def detect_anomalies(df, n_neighbors=20):
         iso_forest_anomalies = []
 
     anomalies = df[(lof_anomalies == -1) | (iso_forest_anomalies == -1)]
-    return anomalies
+    return anomalies if not anomalies.empty else pd.DataFrame()
 
 def detect_drift(train_df, test_df):
     features = [
@@ -129,6 +146,10 @@ def validate_relationships(df):
     return relationships
 
 def preprocess_data(df):
+    # Handle missing values by imputing or dropping
+    if df.isnull().all().any():
+        return pd.DataFrame()  # Return an empty DataFrame if any column is completely NaN
+    df = df.fillna(df.mean())  # Impute missing values with column mean to avoid errors
     # Handle missing values by imputing or dropping
     df = df.dropna(subset=[
         COLUMN_NAMES['ME_CONSUMPTION'], COLUMN_NAMES['OBSERVERD_DISTANCE'], COLUMN_NAMES['SPEED'],
