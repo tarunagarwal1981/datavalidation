@@ -1,8 +1,3 @@
-import streamlit as st
-
-# Set page configuration must be the first Streamlit command
-st.set_page_config(layout="wide")
-
 import pandas as pd
 import numpy as np
 from sklearn.ensemble import IsolationForest
@@ -10,6 +5,7 @@ from sklearn.neighbors import LocalOutlierFactor
 from sklearn.preprocessing import RobustScaler
 from scipy.stats import ks_2samp, chi2_contingency
 from sqlalchemy.exc import SQLAlchemyError
+import streamlit as st
 from database import get_db_engine
 from datetime import datetime, timedelta
 
@@ -77,6 +73,8 @@ def detect_anomalies(df):
         st.warning("Not enough data for anomaly detection.")
         return pd.DataFrame(columns=[COLUMN_NAMES['VESSEL_NAME'], COLUMN_NAMES['REPORT_DATE'], 'Discrepancy'])
 
+    anomalies = pd.DataFrame()  # Initialize an empty DataFrame for anomalies
+
     try:
         iso_forest = IsolationForest(contamination=0.1, random_state=42)
         iso_forest_anomalies = iso_forest.fit_predict(df[features])
@@ -85,7 +83,7 @@ def detect_anomalies(df):
         lof_anomalies = lof.fit_predict(df[features])
 
         combined_anomalies = np.logical_and(iso_forest_anomalies == -1, lof_anomalies == -1)
-        anomalies = df[combined_anomalies]
+        anomalies = df[combined_anomalies]  # Update the 'anomalies' DataFrame if anomalies are detected
 
         if anomalies.empty:
             st.info("No anomalies detected.")
@@ -149,9 +147,7 @@ def run_advanced_validation(engine, vessel_name, date_filter):
         st.warning("Not enough data in training or testing set for drift detection.")
         return pd.DataFrame(columns=['VESSEL_NAME', 'REPORT_DATE', 'Discrepancy'])
 
-    st.write("Performing data drift detection...")
     drift_df = detect_data_drift(train_df, test_df)
-    st.write("Performing anomaly detection...")
     anomalies_df = detect_anomalies(test_df)
 
     combined_results = pd.concat([anomalies_df, drift_df], ignore_index=True)
@@ -160,7 +156,6 @@ def run_advanced_validation(engine, vessel_name, date_filter):
         st.info("No discrepancies detected.")
         return pd.DataFrame(columns=['VESSEL_NAME', 'REPORT_DATE', 'Discrepancy'])
     else:
-        st.write("Discrepancies found.")
         return combined_results[['VESSEL_NAME', 'REPORT_DATE', 'Discrepancy']]
 
 # Streamlit app
@@ -174,14 +169,12 @@ vessel_name = st.text_input("Enter Vessel Name", "ACE ETERNITY")
 if st.button('Run Advanced Validation'):
     try:
         with st.spinner('Running advanced validation...'):
-            st.write("Loading vessel data...")
             final_results = run_advanced_validation(engine, vessel_name, date_filter)
-
+        
         st.write(f"Advanced Validation Results for {vessel_name}:")
         if final_results.empty:
             st.success("No discrepancies detected.")
         else:
-            st.write("Displaying discrepancies:")
             st.dataframe(final_results)
             
         # Option to download results
@@ -194,6 +187,5 @@ if st.button('Run Advanced Validation'):
         )
     except Exception as e:
         st.error(f"An error occurred: {str(e)}")
-        st.write("Debug info: Could not retrieve results. Please check the error details above.")
 
 st.sidebar.info("This app performs advanced validation on vessel data, including anomaly detection and data drift analysis.")
