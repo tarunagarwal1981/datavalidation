@@ -137,7 +137,7 @@ def validate_relationships(df):
     discretizer = KBinsDiscretizer(n_bins=10, encode='ordinal', strategy='uniform')
     target = discretizer.fit_transform(df[[COLUMN_NAMES['ME_CONSUMPTION']]]).ravel()
 
-    mutual_info = mutual_info_regression(df[features], target)
+    mutual_info = mutual_info_regression(df[features[1:]], target)  # Use only predictor features for mutual information
 
     relationships = {}
     for i, feature in enumerate(features[1:]):  # Skip ME_CONSUMPTION itself
@@ -147,8 +147,7 @@ def validate_relationships(df):
 
 def preprocess_data(df):
     # Handle missing values by imputing or dropping
-    if df.isnull().all().any():
-        return pd.DataFrame()  # Return an empty DataFrame if any column is completely NaN
+    df = df.dropna(how='all')  # Drop rows where all values are NaN to avoid empty DataFrames  # Return an empty DataFrame if any column is completely NaN
     df = df.fillna(df.mean())  # Impute missing values with column mean to avoid errors
     # Handle missing values by imputing or dropping
     df = df.dropna(subset=[
