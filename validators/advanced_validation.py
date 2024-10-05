@@ -62,6 +62,10 @@ def run_advanced_validation(engine, vessel_name, date_filter):
 def detect_anomalies(df, n_neighbors=20):
     # Handle missing values by dropping rows with NaN values
     df = df.dropna()
+    if df.shape[0] == 0:
+        return pd.DataFrame()  # Return an empty DataFrame if no rows are left after dropping NaNs
+    # Handle missing values by dropping rows with NaN values
+    df = df.dropna()
     features = [
         COLUMN_NAMES['ME_CONSUMPTION'], COLUMN_NAMES['OBSERVERD_DISTANCE'], COLUMN_NAMES['SPEED'],
         COLUMN_NAMES['DISPLACEMENT'], COLUMN_NAMES['STEAMING_TIME_HRS'], COLUMN_NAMES['WINDFORCE'],
@@ -69,10 +73,16 @@ def detect_anomalies(df, n_neighbors=20):
     ]
 
     lof = LocalOutlierFactor(n_neighbors=n_neighbors, contamination=0.1)
-    lof_anomalies = lof.fit_predict(df[features])
+    if df[features].shape[0] > 0:
+        lof_anomalies = lof.fit_predict(df[features])
+    else:
+        lof_anomalies = []
 
     iso_forest = IsolationForest(contamination=0.1, random_state=42)
-    iso_forest_anomalies = iso_forest.fit_predict(df[features])
+    if df[features].shape[0] > 0:
+        iso_forest_anomalies = iso_forest.fit_predict(df[features])
+    else:
+        iso_forest_anomalies = []
 
     anomalies = df[(lof_anomalies == -1) | (iso_forest_anomalies == -1)]
     return anomalies
