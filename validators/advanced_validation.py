@@ -146,6 +146,36 @@ def validate_relationships(df):
     return relationships
 
 def preprocess_data(df):
+    # Convert columns to appropriate data types
+    df[COLUMN_NAMES['VESSEL_NAME']] = df[COLUMN_NAMES['VESSEL_NAME']].astype(str)
+    df[COLUMN_NAMES['VESSEL_ACTIVITY']] = df[COLUMN_NAMES['VESSEL_ACTIVITY']].astype(str)
+    df[COLUMN_NAMES['LOAD_TYPE']] = df[COLUMN_NAMES['LOAD_TYPE']].astype(str)
+    df[COLUMN_NAMES['REPORT_DATE']] = pd.to_datetime(df[COLUMN_NAMES['REPORT_DATE']])
+    
+    # Handle missing values by imputing or dropping
+    df = df.dropna(how='all')  # Drop rows where all values are NaN to avoid empty DataFrames
+    df = df.fillna(df.select_dtypes(include=['number']).mean())  # Impute numeric columns only with column mean
+    
+    # Handle missing values by dropping rows with NaNs in critical columns
+    df = df.dropna(subset=[
+        COLUMN_NAMES['ME_CONSUMPTION'], COLUMN_NAMES['OBSERVERD_DISTANCE'], COLUMN_NAMES['SPEED'],
+        COLUMN_NAMES['DISPLACEMENT'], COLUMN_NAMES['STEAMING_TIME_HRS'], COLUMN_NAMES['WINDFORCE'],
+        COLUMN_NAMES['VESSEL_ACTIVITY'], COLUMN_NAMES['LOAD_TYPE']
+    ])
+    
+    # Convert categorical columns to numeric codes
+    df[COLUMN_NAMES['VESSEL_ACTIVITY']] = pd.Categorical(df[COLUMN_NAMES['VESSEL_ACTIVITY']]).codes
+    df[COLUMN_NAMES['LOAD_TYPE']] = pd.Categorical(df[COLUMN_NAMES['LOAD_TYPE']]).codes
+
+    # Scale numeric columns
+    numeric_columns = [
+        COLUMN_NAMES['ME_CONSUMPTION'], COLUMN_NAMES['OBSERVERD_DISTANCE'], COLUMN_NAMES['SPEED'],
+        COLUMN_NAMES['DISPLACEMENT'], COLUMN_NAMES['STEAMING_TIME_HRS'], COLUMN_NAMES['WINDFORCE']
+    ]
+    scaler = RobustScaler()
+    df[numeric_columns] = scaler.fit_transform(df[numeric_columns])
+
+    return df
     # Handle missing values by imputing or dropping
     df = df.dropna(how='all')  # Drop rows where all values are NaN to avoid empty DataFrames  # Return an empty DataFrame if any column is completely NaN
     df = df.fillna(df.mean())  # Impute missing values with column mean to avoid errors
