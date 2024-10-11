@@ -53,6 +53,14 @@ def run_advanced_validation(engine, vessel_name, date_filter):
     # Feature Relationships using Mutual Information
     relationships = validate_relationships(train_df)
 
+    # Ensure that the return value is a dictionary with all expected keys
+    results = {
+        'anomalies': anomalies if not anomalies.empty else pd.DataFrame(),
+        'drift': drift if drift else {},
+        'change_points': change_points if change_points else {},
+        'relationships': relationships if relationships else {}
+    }
+
     for index, row in anomalies.iterrows():
         validation_results.append({
             'Vessel Name': str(vessel_name),
@@ -74,15 +82,15 @@ def run_advanced_validation(engine, vessel_name, date_filter):
                 'Feature': str(feature),
                 'Value': str(points)  # Convert points to string to avoid type issues
             })
-    return pd.DataFrame(validation_results)
+
+    return pd.DataFrame(validation_results), results
 
 def detect_anomalies(df, n_neighbors=20):
     # Handle missing values by dropping rows with NaN values
     df = df.dropna()
     if df.shape[0] == 0:
         return pd.DataFrame()  # Return an empty DataFrame if no rows are left after dropping NaNs
-    # Handle missing values by dropping rows with NaN values
-    df = df.dropna()
+
     features = [
         COLUMN_NAMES['ME_CONSUMPTION'], COLUMN_NAMES['OBSERVERD_DISTANCE'], COLUMN_NAMES['SPEED'],
         COLUMN_NAMES['DISPLACEMENT'], COLUMN_NAMES['STEAMING_TIME_HRS'], COLUMN_NAMES['WINDFORCE'],
@@ -90,16 +98,10 @@ def detect_anomalies(df, n_neighbors=20):
     ]
 
     lof = LocalOutlierFactor(n_neighbors=n_neighbors, contamination=0.1)
-    if df[features].shape[0] > 0:
-        lof_anomalies = lof.fit_predict(df[features])
-    else:
-        lof_anomalies = []
+    lof_anomalies = lof.fit_predict(df[features]) if df[features].shape[0] > 0 else []
 
     iso_forest = IsolationForest(contamination=0.1, random_state=42)
-    if df[features].shape[0] > 0:
-        iso_forest_anomalies = iso_forest.fit_predict(df[features])
-    else:
-        iso_forest_anomalies = []
+    iso_forest_anomalies = iso_forest.fit_predict(df[features]) if df[features].shape[0] > 0 else []
 
     anomalies = df[(lof_anomalies == -1) | (iso_forest_anomalies == -1)]
     return anomalies if not anomalies.empty else pd.DataFrame()
@@ -168,26 +170,6 @@ def preprocess_data(df):
     df[COLUMN_NAMES['LOAD_TYPE']] = pd.Categorical(df[COLUMN_NAMES['LOAD_TYPE']]).codes
 
     # Scale numeric columns
-    numeric_columns = [
-        COLUMN_NAMES['ME_CONSUMPTION'], COLUMN_NAMES['OBSERVERD_DISTANCE'], COLUMN_NAMES['SPEED'],
-        COLUMN_NAMES['DISPLACEMENT'], COLUMN_NAMES['STEAMING_TIME_HRS'], COLUMN_NAMES['WINDFORCE']
-    ]
-    scaler = RobustScaler()
-    df[numeric_columns] = scaler.fit_transform(df[numeric_columns])
-
-    return df
-    # Handle missing values by imputing or dropping
-    df = df.dropna(how='all')  # Drop rows where all values are NaN to avoid empty DataFrames  # Return an empty DataFrame if any column is completely NaN
-    df = df.fillna(df.mean())  # Impute missing values with column mean to avoid errors
-    # Handle missing values by imputing or dropping
-    df = df.dropna(subset=[
-        COLUMN_NAMES['ME_CONSUMPTION'], COLUMN_NAMES['OBSERVERD_DISTANCE'], COLUMN_NAMES['SPEED'],
-        COLUMN_NAMES['DISPLACEMENT'], COLUMN_NAMES['STEAMING_TIME_HRS'], COLUMN_NAMES['WINDFORCE'],
-        COLUMN_NAMES['VESSEL_ACTIVITY'], COLUMN_NAMES['LOAD_TYPE']
-    ])
-    df[COLUMN_NAMES['VESSEL_ACTIVITY']] = pd.Categorical(df[COLUMN_NAMES['VESSEL_ACTIVITY']]).codes
-    df[COLUMN_NAMES['LOAD_TYPE']] = pd.Categorical(df[COLUMN_NAMES['LOAD_TYPE']]).codes
-
     numeric_columns = [
         COLUMN_NAMES['ME_CONSUMPTION'], COLUMN_NAMES['OBSERVERD_DISTANCE'], COLUMN_NAMES['SPEED'],
         COLUMN_NAMES['DISPLACEMENT'], COLUMN_NAMES['STEAMING_TIME_HRS'], COLUMN_NAMES['WINDFORCE']
