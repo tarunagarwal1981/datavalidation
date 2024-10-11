@@ -72,28 +72,36 @@ def run_advanced_validation(engine, vessel_name, date_filter):
         'relationships': relationships if relationships else {}
     }
 
+    # Generate user-friendly validation results
     for index, row in anomalies.iterrows():
-        validation_results.append({
-            'Vessel Name': str(vessel_name),
-            'Report Date': row[COLUMN_NAMES['REPORT_DATE']].strftime('%Y-%m-%d'),
-            'Issue Type': 'Anomaly Detected',
-            'Details': f"Anomalous values detected in features: {', '.join([k for k, v in row.to_dict().items() if v == -1])}"
-        })
+        issue_details = []
+        for feature in row.index:
+            if row[feature] == -1:
+                issue_details.append(f"Anomaly in {feature}")
+        if issue_details:
+            validation_results.append({
+                'Vessel Name': str(vessel_name),
+                'Report Date': row[COLUMN_NAMES['REPORT_DATE']].strftime('%Y-%m-%d'),
+                'Issue Observed': 'Anomalous data detected',
+                'Details': '; '.join(issue_details)
+            })
+
     for feature, has_drift in drift.items():
         if has_drift:
             validation_results.append({
                 'Vessel Name': str(vessel_name),
                 'Report Date': 'Multiple Dates',
-                'Issue Type': 'Drift Detected',
-                'Details': f"Significant drift detected in feature: {feature}"
+                'Issue Observed': 'Data Drift Detected',
+                'Details': f"The data for {feature} shows significant drift, indicating a possible change in data distribution."
             })
+
     for feature, points in change_points.items():
         if points:
             validation_results.append({
                 'Vessel Name': str(vessel_name),
                 'Report Date': 'Multiple Dates',
-                'Issue Type': 'Change Point Detected',
-                'Details': f"Change points detected in feature: {feature} at data points {points}"
+                'Issue Observed': 'Change Point Detected',
+                'Details': f"Change points detected in {feature} at data points {points}. This suggests a significant shift in the behavior of this feature."
             })
 
     return results
