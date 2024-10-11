@@ -75,23 +75,25 @@ def run_advanced_validation(engine, vessel_name, date_filter):
     for index, row in anomalies.iterrows():
         validation_results.append({
             'Vessel Name': str(vessel_name),
-            'Anomaly Name': 'Anomaly Detected',
-            'Feature': {k: str(v) for k, v in row.to_dict().items()}  # Convert all values to strings to avoid type issues
+            'Report Date': row[COLUMN_NAMES['REPORT_DATE']].strftime('%Y-%m-%d'),
+            'Issue Type': 'Anomaly Detected',
+            'Details': f"Anomalous values detected in features: {', '.join([k for k, v in row.to_dict().items() if v == -1])}"
         })
     for feature, has_drift in drift.items():
         if has_drift:
             validation_results.append({
                 'Vessel Name': str(vessel_name),
-                'Anomaly Name': 'Drift Detected',
-                'Feature': str(feature)  # Convert feature to string
+                'Report Date': 'Multiple Dates',
+                'Issue Type': 'Drift Detected',
+                'Details': f"Significant drift detected in feature: {feature}"
             })
     for feature, points in change_points.items():
         if points:
             validation_results.append({
                 'Vessel Name': str(vessel_name),
-                'Anomaly Name': 'Change Point Detected',
-                'Feature': str(feature),
-                'Value': str(points)  # Convert points to string to avoid type issues
+                'Report Date': 'Multiple Dates',
+                'Issue Type': 'Change Point Detected',
+                'Details': f"Change points detected in feature: {feature} at data points {points}"
             })
 
     return results
