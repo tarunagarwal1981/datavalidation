@@ -200,6 +200,6 @@ def preprocess_data(df):
     ]
     scaler = RobustScaler()
     if df[numeric_columns].shape[0] > 0:
-        df[numeric_columns] = scaler.fit_transform(df[numeric_columns])
+        df.loc[:, numeric_columns] = scaler.fit_transform(df[numeric_columns])
 
     return df
