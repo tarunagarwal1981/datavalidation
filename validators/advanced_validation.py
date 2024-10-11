@@ -146,9 +146,16 @@ def validate_relationships(df):
         COLUMN_NAMES['STEAMING_TIME_HRS']
     ]
 
+    # Check if the dataframe is empty before proceeding
+    if df.shape[0] == 0:
+        return {feature: 0.0 for feature in features[1:]}
+
     # Discretize the target feature if necessary to handle non-continuous data
     discretizer = KBinsDiscretizer(n_bins=10, encode='ordinal', strategy='uniform')
-    target = discretizer.fit_transform(df[[COLUMN_NAMES['ME_CONSUMPTION']]]).ravel()
+    try:
+        target = discretizer.fit_transform(df[[COLUMN_NAMES['ME_CONSUMPTION']]]).ravel()
+    except ValueError:
+        return {feature: 0.0 for feature in features[1:]}  # Return default values if discretization fails
 
     mutual_info = mutual_info_regression(df[features[1:]], target)  # Use only predictor features for mutual information
 
@@ -186,11 +193,3 @@ def preprocess_data(df):
 
     # Scale numeric columns
     numeric_columns = [
-        COLUMN_NAMES['ME_CONSUMPTION'], COLUMN_NAMES['OBSERVERD_DISTANCE'], COLUMN_NAMES['SPEED'],
-        COLUMN_NAMES['DISPLACEMENT'], COLUMN_NAMES['STEAMING_TIME_HRS'], COLUMN_NAMES['WINDFORCE']
-    ]
-    scaler = RobustScaler()
-    if df[numeric_columns].shape[0] > 0:
-        df[numeric_columns] = scaler.fit_transform(df[numeric_columns])
-
-    return df
