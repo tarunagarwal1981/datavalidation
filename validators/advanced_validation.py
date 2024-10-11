@@ -53,8 +53,9 @@ def run_advanced_validation(engine, vessel_name, date_filter):
     # Feature Relationships using Mutual Information
     relationships = validate_relationships(train_df)
 
-    # Ensure that the return value is a dictionary with all expected keys
+    # Create a dictionary for results
     results = {
+        'validation_results': validation_results,
         'anomalies': anomalies if not anomalies.empty else pd.DataFrame(),
         'drift': drift if drift else {},
         'change_points': change_points if change_points else {},
@@ -83,7 +84,7 @@ def run_advanced_validation(engine, vessel_name, date_filter):
                 'Value': str(points)  # Convert points to string to avoid type issues
             })
 
-    return validation_results, results
+    return results
 
 def detect_anomalies(df, n_neighbors=20):
     # Handle missing values by dropping rows with NaN values
