@@ -83,7 +83,7 @@ def run_advanced_validation(engine, vessel_name, date_filter):
                 'Value': str(points)  # Convert points to string to avoid type issues
             })
 
-    return pd.DataFrame(validation_results), results
+    return validation_results, results
 
 def detect_anomalies(df, n_neighbors=20):
     # Handle missing values by dropping rows with NaN values
