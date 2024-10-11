@@ -41,6 +41,15 @@ def run_advanced_validation(engine, vessel_name, date_filter):
     train_df = preprocess_data(train_df)
     test_df = preprocess_data(test_df)
 
+    # If test_df is empty after preprocessing, return empty results
+    if test_df.shape[0] == 0:
+        return validation_results, {
+            'anomalies': pd.DataFrame(),
+            'drift': {},
+            'change_points': {},
+            'relationships': {}
+        }
+
     # Anomaly Detection using Isolation Forest and LOF
     anomalies = detect_anomalies(test_df)
 
@@ -53,9 +62,8 @@ def run_advanced_validation(engine, vessel_name, date_filter):
     # Feature Relationships using Mutual Information
     relationships = validate_relationships(train_df)
 
-    # Create a dictionary for results
+    # Ensure that the return value is a dictionary with all expected keys
     results = {
-        'validation_results': validation_results,
         'anomalies': anomalies if not anomalies.empty else pd.DataFrame(),
         'drift': drift if drift else {},
         'change_points': change_points if change_points else {},
@@ -84,7 +92,7 @@ def run_advanced_validation(engine, vessel_name, date_filter):
                 'Value': str(points)  # Convert points to string to avoid type issues
             })
 
-    return results
+    return validation_results, results
 
 def detect_anomalies(df, n_neighbors=20):
     # Handle missing values by dropping rows with NaN values
@@ -166,6 +174,10 @@ def preprocess_data(df):
         COLUMN_NAMES['VESSEL_ACTIVITY'], COLUMN_NAMES['LOAD_TYPE']
     ])
     
+    # If the dataframe is empty after dropping critical NaNs, return it as is
+    if df.shape[0] == 0:
+        return df
+
     # Convert categorical columns to numeric codes
     df[COLUMN_NAMES['VESSEL_ACTIVITY']] = pd.Categorical(df[COLUMN_NAMES['VESSEL_ACTIVITY']]).codes
     df[COLUMN_NAMES['LOAD_TYPE']] = pd.Categorical(df[COLUMN_NAMES['LOAD_TYPE']]).codes
@@ -176,6 +188,7 @@ def preprocess_data(df):
         COLUMN_NAMES['DISPLACEMENT'], COLUMN_NAMES['STEAMING_TIME_HRS'], COLUMN_NAMES['WINDFORCE']
     ]
     scaler = RobustScaler()
-    df[numeric_columns] = scaler.fit_transform(df[numeric_columns])
+    if df[numeric_columns].shape[0] > 0:
+        df[numeric_columns] = scaler.fit_transform(df[numeric_columns])
 
     return df
