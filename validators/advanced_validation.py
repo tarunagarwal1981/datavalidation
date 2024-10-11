@@ -43,7 +43,8 @@ def run_advanced_validation(engine, vessel_name, date_filter):
 
     # If test_df is empty after preprocessing, return empty results
     if test_df.shape[0] == 0:
-        return validation_results, {
+        return {
+            'validation_results': validation_results,
             'anomalies': pd.DataFrame(),
             'drift': {},
             'change_points': {},
@@ -64,6 +65,7 @@ def run_advanced_validation(engine, vessel_name, date_filter):
 
     # Ensure that the return value is a dictionary with all expected keys
     results = {
+        'validation_results': validation_results,
         'anomalies': anomalies if not anomalies.empty else pd.DataFrame(),
         'drift': drift if drift else {},
         'change_points': change_points if change_points else {},
@@ -92,7 +94,7 @@ def run_advanced_validation(engine, vessel_name, date_filter):
                 'Value': str(points)  # Convert points to string to avoid type issues
             })
 
-    return validation_results, results
+    return results
 
 def detect_anomalies(df, n_neighbors=20):
     # Handle missing values by dropping rows with NaN values
