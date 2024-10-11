@@ -96,12 +96,7 @@ def run_advanced_validation(engine, vessel_name, date_filter):
                 'Details': f"Change points detected in feature: {feature} at data points {points}"
             })
 
-    # Convert validation results to a more user-friendly format
-    user_friendly_results = []
-    for result in validation_results:
-        user_friendly_results.append(f"Vessel: {result['Vessel Name']}, Date: {result['Report Date']}, Issue: {result['Issue Type']}, Details: {result['Details']}")
-
-    return {'validation_results': user_friendly_results}
+    return results
 
 def detect_anomalies(df, n_neighbors=20):
     # Handle missing values by dropping rows with NaN values
