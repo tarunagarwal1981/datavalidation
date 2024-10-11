@@ -193,3 +193,11 @@ def preprocess_data(df):
 
     # Scale numeric columns
     numeric_columns = [
+        COLUMN_NAMES['ME_CONSUMPTION'], COLUMN_NAMES['OBSERVERD_DISTANCE'], COLUMN_NAMES['SPEED'],
+        COLUMN_NAMES['DISPLACEMENT'], COLUMN_NAMES['STEAMING_TIME_HRS'], COLUMN_NAMES['WINDFORCE']
+    ]
+    scaler = RobustScaler()
+    if df[numeric_columns].shape[0] > 0:
+        df[numeric_columns] = scaler.fit_transform(df[numeric_columns])
+
+    return df
