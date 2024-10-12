@@ -187,19 +187,25 @@ def validate_relationships(df):
 
 def format_validation_results(results):
     formatted_results = []
-    vessel_name = results['vessel_name']
+    vessel_name = results.get('vessel_name', 'Unknown Vessel')
     
     # Format anomalies
     anomalies = results.get('anomalies', pd.DataFrame())
-    if not anomalies.empty:
+    if isinstance(anomalies, pd.DataFrame) and not anomalies.empty:
         for _, row in anomalies.iterrows():
             anomalous_features = [k.replace('_anomaly', '') for k, v in row.items() if k.endswith('_anomaly') and v == 1]
             if anomalous_features:
                 formatted_results.append({
-                    'Date': row[COLUMN_NAMES['REPORT_DATE']].strftime('%Y-%m-%d') if COLUMN_NAMES['REPORT_DATE'] in row else 'Unknown Date',
+                    'Date': row.get(COLUMN_NAMES['REPORT_DATE'], 'Unknown Date'),
                     'Issue': 'Unusual Data Detected',
                     'Explanation': f"Unusual values were found in {', '.join(anomalous_features)}. This could indicate measurement errors or exceptional operating conditions."
                 })
+    elif anomalies:  # If anomalies is not empty but also not a DataFrame
+        formatted_results.append({
+            'Date': 'Unknown Date',
+            'Issue': 'Unusual Data Detected',
+            'Explanation': "Anomalies were detected, but the format is unexpected. Please check the raw data for details."
+        })
     
     # Format drift
     drift = results.get('drift', {})
