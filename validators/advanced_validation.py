@@ -177,18 +177,21 @@ def format_validation_results(results, vessel_name):
     formatted_results = []
     
     # Format anomalies
-    for _, row in results['anomalies'].iterrows():
-        anomalous_features = [k for k, v in row.items() if v == -1 and k != COLUMN_NAMES['REPORT_DATE']]
-        if anomalous_features:
-            formatted_results.append({
-                'Vessel Name': vessel_name,
-                'Date': row[COLUMN_NAMES['REPORT_DATE']].strftime('%Y-%m-%d'),
-                'Issue': 'Unusual Data Detected',
-                'Explanation': f"Unusual values were found in {', '.join(anomalous_features)}. This could indicate measurement errors or exceptional operating conditions."
-            })
+    anomalies = results.get('anomalies', pd.DataFrame())
+    if not anomalies.empty:
+        for _, row in anomalies.iterrows():
+            anomalous_features = [k for k, v in row.items() if v == -1 and k != COLUMN_NAMES['REPORT_DATE']]
+            if anomalous_features:
+                formatted_results.append({
+                    'Vessel Name': vessel_name,
+                    'Date': row[COLUMN_NAMES['REPORT_DATE']].strftime('%Y-%m-%d') if COLUMN_NAMES['REPORT_DATE'] in row else 'Unknown Date',
+                    'Issue': 'Unusual Data Detected',
+                    'Explanation': f"Unusual values were found in {', '.join(anomalous_features)}. This could indicate measurement errors or exceptional operating conditions."
+                })
     
     # Format drift
-    for feature, has_drift in results['drift'].items():
+    drift = results.get('drift', {})
+    for feature, has_drift in drift.items():
         if has_drift:
             formatted_results.append({
                 'Vessel Name': vessel_name,
@@ -198,7 +201,8 @@ def format_validation_results(results, vessel_name):
             })
     
     # Format change points
-    for feature, points in results['change_points'].items():
+    change_points = results.get('change_points', {})
+    for feature, points in change_points.items():
         if points:
             formatted_results.append({
                 'Vessel Name': vessel_name,
@@ -208,7 +212,8 @@ def format_validation_results(results, vessel_name):
             })
     
     # Format relationships
-    weak_relationships = [f for f, v in results['relationships'].items() if v < 0.3]
+    relationships = results.get('relationships', {})
+    weak_relationships = [f for f, v in relationships.items() if v < 0.3]
     if weak_relationships:
         formatted_results.append({
             'Vessel Name': vessel_name,
