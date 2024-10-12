@@ -22,27 +22,11 @@ COLUMN_NAMES = {
 }
 
 def run_advanced_validation(engine, vessel_name, date_filter):
-    # Fetch data for the vessel
-    query = """
-    SELECT * FROM sf_consumption_logs
-    WHERE "{}" = %s AND "{}" >= %s;
-    """.format(COLUMN_NAMES['VESSEL_NAME'], COLUMN_NAMES['REPORT_DATE'])
-    df = pd.read_sql_query(query, engine, params=(vessel_name, date_filter))
-
-    # Split data into training (first 6 months) and validation (last 6 months)
-    df[COLUMN_NAMES['REPORT_DATE']] = pd.to_datetime(df[COLUMN_NAMES['REPORT_DATE']])
-    df = df.sort_values(by=COLUMN_NAMES['REPORT_DATE'])
-    mid_point = len(df) // 2
-    train_df = df.iloc[:mid_point]
-    test_df = df.iloc[mid_point:]
-
-    # Preprocess training and validation data separately to avoid data leakage
-    train_df = preprocess_data(train_df)
-    test_df = preprocess_data(test_df)
+    # ... (keep existing code up to the preprocessing step)
 
     # If test_df is empty after preprocessing, return empty results
     if test_df.shape[0] == 0:
-        return []
+        return {'vessel_name': vessel_name, 'issues': []}
 
     # Anomaly Detection using Isolation Forest and LOF
     anomalies = detect_anomalies(test_df)
@@ -57,14 +41,62 @@ def run_advanced_validation(engine, vessel_name, date_filter):
     relationships = validate_relationships(train_df)
 
     # Format the results
-    results = {
+    formatted_results = format_validation_results({
+        'vessel_name': vessel_name,
         'anomalies': anomalies,
         'drift': drift,
         'change_points': change_points,
         'relationships': relationships
-    }
+    })
     
-    formatted_results = format_validation_results(results, vessel_name)
+    return {'vessel_name': vessel_name, 'issues': formatted_results}
+
+def format_validation_results(results):
+    formatted_results = []
+    vessel_name = results['vessel_name']
+    
+    # Format anomalies
+    anomalies = results.get('anomalies', pd.DataFrame())
+    if not anomalies.empty:
+        for _, row in anomalies.iterrows():
+            anomalous_features = [k for k, v in row.items() if v == -1 and k != COLUMN_NAMES['REPORT_DATE']]
+            if anomalous_features:
+                formatted_results.append({
+                    'Date': row[COLUMN_NAMES['REPORT_DATE']].strftime('%Y-%m-%d') if COLUMN_NAMES['REPORT_DATE'] in row else 'Unknown Date',
+                    'Issue': 'Unusual Data Detected',
+                    'Explanation': f"Unusual values were found in {', '.join(anomalous_features)}. This could indicate measurement errors or exceptional operating conditions."
+                })
+    
+    # Format drift
+    drift = results.get('drift', {})
+    for feature, has_drift in drift.items():
+        if has_drift:
+            formatted_results.append({
+                'Date': 'Multiple Dates',
+                'Issue': 'Data Trend Change Detected',
+                'Explanation': f"The pattern of {feature} has changed significantly over time. This might indicate changes in operating conditions or equipment performance."
+            })
+    
+    # Format change points
+    change_points = results.get('change_points', {})
+    for feature, points in change_points.items():
+        if points:
+            formatted_results.append({
+                'Date': 'Specific Dates',
+                'Issue': 'Sudden Changes Detected',
+                'Explanation': f"Sudden changes were detected in {feature}. This could indicate equipment changes, maintenance events, or changes in operating procedures."
+            })
+    
+    # Format relationships
+    relationships = results.get('relationships', {})
+    weak_relationships = [f for f, v in relationships.items() if v < 0.3]
+    if weak_relationships:
+        formatted_results.append({
+            'Date': 'Overall Analysis',
+            'Issue': 'Unexpected Data Relationships',
+            'Explanation': f"The following factors show weaker than expected influence on fuel consumption: {', '.join(weak_relationships)}. This might indicate data quality issues or unusual operating conditions."
+        })
+    
     return formatted_results
 
 def detect_anomalies(df, n_neighbors=20):
