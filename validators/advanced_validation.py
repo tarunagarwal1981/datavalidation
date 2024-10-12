@@ -190,7 +190,7 @@ def format_validation_results(results):
     vessel_name = results.get('vessel_name', 'Unknown Vessel')
     
     # Format anomalies
-    anomalies = results.get('anomalies', pd.DataFrame())
+    anomalies = results.get('anomalies')
     if isinstance(anomalies, pd.DataFrame) and not anomalies.empty:
         for _, row in anomalies.iterrows():
             anomalous_features = [k.replace('_anomaly', '') for k, v in row.items() if k.endswith('_anomaly') and v == 1]
@@ -200,7 +200,7 @@ def format_validation_results(results):
                     'Issue': 'Unusual Data Detected',
                     'Explanation': f"Unusual values were found in {', '.join(anomalous_features)}. This could indicate measurement errors or exceptional operating conditions."
                 })
-    elif anomalies:  # If anomalies is not empty but also not a DataFrame
+    elif anomalies is not None and not isinstance(anomalies, pd.DataFrame):
         formatted_results.append({
             'Date': 'Unknown Date',
             'Issue': 'Unusual Data Detected',
