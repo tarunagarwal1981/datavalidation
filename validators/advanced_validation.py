@@ -1,5 +1,4 @@
 import pandas as pd
-import numpy as np
 from sklearn.ensemble import IsolationForest
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.feature_selection import mutual_info_regression
@@ -23,16 +22,13 @@ COLUMN_NAMES = {
 }
 
 def run_advanced_validation(engine, vessel_name, date_filter):
+    validation_results = []
     # Fetch data for the vessel
     query = """
     SELECT * FROM sf_consumption_logs
     WHERE "{}" = %s AND "{}" >= %s;
     """.format(COLUMN_NAMES['VESSEL_NAME'], COLUMN_NAMES['REPORT_DATE'])
     df = pd.read_sql_query(query, engine, params=(vessel_name, date_filter))
-
-    # If df is empty, return empty results
-    if df.empty:
-        return {'vessel_name': vessel_name, 'issues': []}
 
     # Split data into training (first 6 months) and validation (last 6 months)
     df[COLUMN_NAMES['REPORT_DATE']] = pd.to_datetime(df[COLUMN_NAMES['REPORT_DATE']])
@@ -47,7 +43,13 @@ def run_advanced_validation(engine, vessel_name, date_filter):
 
     # If test_df is empty after preprocessing, return empty results
     if test_df.shape[0] == 0:
-        return {'vessel_name': vessel_name, 'issues': []}
+        return {
+            'validation_results': validation_results,
+            'anomalies': pd.DataFrame(),
+            'drift': {},
+            'change_points': {},
+            'relationships': {}
+        }
 
     # Anomaly Detection using Isolation Forest and LOF
     anomalies = detect_anomalies(test_df)
@@ -61,59 +63,42 @@ def run_advanced_validation(engine, vessel_name, date_filter):
     # Feature Relationships using Mutual Information
     relationships = validate_relationships(train_df)
 
-    # Format the results
-    formatted_results = format_validation_results({
-        'vessel_name': vessel_name,
-        'anomalies': anomalies,
-        'drift': drift,
-        'change_points': change_points,
-        'relationships': relationships
-    })
-    
-    return {'vessel_name': vessel_name, 'issues': formatted_results}
+    # Ensure that the return value is a dictionary with all expected keys
+    results = {
+        'validation_results': validation_results,
+        'anomalies': anomalies if not anomalies.empty else pd.DataFrame(),
+        'drift': drift if drift else {},
+        'change_points': change_points if change_points else {},
+        'relationships': relationships if relationships else {}
+    }
 
-def preprocess_data(df):
-    # Create a copy of the DataFrame to avoid SettingWithCopyWarning
-    df = df.copy()
-    
-    # Convert columns to appropriate data types
-    df[COLUMN_NAMES['VESSEL_NAME']] = df[COLUMN_NAMES['VESSEL_NAME']].astype(str)
-    df[COLUMN_NAMES['VESSEL_ACTIVITY']] = df[COLUMN_NAMES['VESSEL_ACTIVITY']].astype(str)
-    df[COLUMN_NAMES['LOAD_TYPE']] = df[COLUMN_NAMES['LOAD_TYPE']].astype(str)
-    df[COLUMN_NAMES['REPORT_DATE']] = pd.to_datetime(df[COLUMN_NAMES['REPORT_DATE']])
-    
-    # Handle missing values by imputing or dropping
-    df = df.dropna(how='all')  # Drop rows where all values are NaN to avoid empty DataFrames
-    df = df.fillna(df.select_dtypes(include=['number']).mean())  # Impute numeric columns only with column mean
-    
-    # Handle missing values by dropping rows with NaNs in critical columns
-    critical_columns = [
-        COLUMN_NAMES['ME_CONSUMPTION'], COLUMN_NAMES['OBSERVERD_DISTANCE'], COLUMN_NAMES['SPEED'],
-        COLUMN_NAMES['DISPLACEMENT'], COLUMN_NAMES['STEAMING_TIME_HRS'], COLUMN_NAMES['WINDFORCE'],
-        COLUMN_NAMES['VESSEL_ACTIVITY'], COLUMN_NAMES['LOAD_TYPE']
-    ]
-    df = df.dropna(subset=critical_columns)
-    
-    # If the dataframe is empty after dropping critical NaNs, return it as is
-    if df.shape[0] == 0:
-        return df
+    for index, row in anomalies.iterrows():
+        validation_results.append({
+            'Vessel Name': str(vessel_name),
+            'Report Date': row[COLUMN_NAMES['REPORT_DATE']].strftime('%Y-%m-%d'),
+            'Issue Type': 'Anomaly Detected',
+            'Details': f"Anomalous values detected in features: {', '.join([k for k, v in row.to_dict().items() if v == -1])}"
+        })
+    for feature, has_drift in drift.items():
+        if has_drift:
+            validation_results.append({
+                'Vessel Name': str(vessel_name),
+                'Report Date': 'Multiple Dates',
+                'Issue Type': 'Drift Detected',
+                'Details': f"Significant drift detected in feature: {feature}"
+            })
+    for feature, points in change_points.items():
+        if points:
+            validation_results.append({
+                'Vessel Name': str(vessel_name),
+                'Report Date': 'Multiple Dates',
+                'Issue Type': 'Change Point Detected',
+                'Details': f"Change points detected in feature: {feature} at data points {points}"
+            })
 
-    # Convert categorical columns to numeric codes
-    df[COLUMN_NAMES['VESSEL_ACTIVITY']] = pd.Categorical(df[COLUMN_NAMES['VESSEL_ACTIVITY']]).codes
-    df[COLUMN_NAMES['LOAD_TYPE']] = pd.Categorical(df[COLUMN_NAMES['LOAD_TYPE']]).codes
+    return results
 
-    # Scale numeric columns
-    numeric_columns = [
-        COLUMN_NAMES['ME_CONSUMPTION'], COLUMN_NAMES['OBSERVERD_DISTANCE'], COLUMN_NAMES['SPEED'],
-        COLUMN_NAMES['DISPLACEMENT'], COLUMN_NAMES['STEAMING_TIME_HRS'], COLUMN_NAMES['WINDFORCE']
-    ]
-    scaler = RobustScaler()
-    if df[numeric_columns].shape[0] > 0:
-        df.loc[:, numeric_columns] = scaler.fit_transform(df[numeric_columns])
-
-    return df
-
-def detect_anomalies(df, n_neighbors=20, contamination=0.1):
+def detect_anomalies(df, n_neighbors=20):
     # Handle missing values by dropping rows with NaN values
     df = df.dropna()
     if df.shape[0] == 0:
@@ -125,17 +110,14 @@ def detect_anomalies(df, n_neighbors=20, contamination=0.1):
         COLUMN_NAMES['VESSEL_ACTIVITY'], COLUMN_NAMES['LOAD_TYPE']
     ]
 
-    lof = LocalOutlierFactor(n_neighbors=n_neighbors, contamination=contamination)
-    iso_forest = IsolationForest(contamination=contamination, random_state=42)
+    lof = LocalOutlierFactor(n_neighbors=n_neighbors, contamination=0.1)
+    lof_anomalies = lof.fit_predict(df[features]) if df[features].shape[0] > 0 else []
 
-    lof_anomalies = lof.fit_predict(df[features])
-    iso_forest_anomalies = iso_forest.fit_predict(df[features])
+    iso_forest = IsolationForest(contamination=0.1, random_state=42)
+    iso_forest_anomalies = iso_forest.fit_predict(df[features]) if df[features].shape[0] > 0 else []
 
-    anomalies = df[(lof_anomalies == -1) | (iso_forest_anomalies == -1)].copy()
-    for feature in features:
-        anomalies[f"{feature}_anomaly"] = ((lof_anomalies == -1) | (iso_forest_anomalies == -1)).astype(int)
-
-    return anomalies
+    anomalies = df[(lof_anomalies == -1) | (iso_forest_anomalies == -1)]
+    return anomalies if not anomalies.empty else pd.DataFrame()
 
 def detect_drift(train_df, test_df):
     features = [
@@ -185,89 +167,39 @@ def validate_relationships(df):
 
     return relationships
 
-def format_validation_results(results):
-    formatted_results = []
-    vessel_name = results.get('vessel_name', 'Unknown Vessel')
+def preprocess_data(df):
+    # Convert columns to appropriate data types
+    df[COLUMN_NAMES['VESSEL_NAME']] = df[COLUMN_NAMES['VESSEL_NAME']].astype(str)
+    df[COLUMN_NAMES['VESSEL_ACTIVITY']] = df[COLUMN_NAMES['VESSEL_ACTIVITY']].astype(str)
+    df[COLUMN_NAMES['LOAD_TYPE']] = df[COLUMN_NAMES['LOAD_TYPE']].astype(str)
+    df[COLUMN_NAMES['REPORT_DATE']] = pd.to_datetime(df[COLUMN_NAMES['REPORT_DATE']])
     
-    # Format anomalies
-    anomalies = results.get('anomalies')
-    if isinstance(anomalies, pd.DataFrame) and not anomalies.empty:
-        for _, row in anomalies.iterrows():
-            anomalous_features = [k.replace('_anomaly', '') for k, v in row.items() if k.endswith('_anomaly') and v == 1]
-            if anomalous_features:
-                formatted_results.append({
-                    'Date': row.get(COLUMN_NAMES['REPORT_DATE'], 'Unknown Date'),
-                    'Issue': 'Unusual Data Detected',
-                    'Explanation': f"Unusual values were found in {', '.join(anomalous_features)}. This could indicate measurement errors or exceptional operating conditions."
-                })
-    elif anomalies is not None and not isinstance(anomalies, pd.DataFrame):
-        formatted_results.append({
-            'Date': 'Unknown Date',
-            'Issue': 'Unusual Data Detected',
-            'Explanation': "Anomalies were detected, but the format is unexpected. Please check the raw data for details."
-        })
+    # Handle missing values by imputing or dropping
+    df = df.dropna(how='all')  # Drop rows where all values are NaN to avoid empty DataFrames
+    df = df.fillna(df.select_dtypes(include=['number']).mean())  # Impute numeric columns only with column mean
     
-    # Format drift
-    drift = results.get('drift', {})
-    for feature, has_drift in drift.items():
-        if has_drift:
-            formatted_results.append({
-                'Date': 'Multiple Dates',
-                'Issue': 'Data Trend Change Detected',
-                'Explanation': f"The pattern of {feature} has changed significantly over time. This might indicate changes in operating conditions or equipment performance."
-            })
+    # Handle missing values by dropping rows with NaNs in critical columns
+    df = df.dropna(subset=[
+        COLUMN_NAMES['ME_CONSUMPTION'], COLUMN_NAMES['OBSERVERD_DISTANCE'], COLUMN_NAMES['SPEED'],
+        COLUMN_NAMES['DISPLACEMENT'], COLUMN_NAMES['STEAMING_TIME_HRS'], COLUMN_NAMES['WINDFORCE'],
+        COLUMN_NAMES['VESSEL_ACTIVITY'], COLUMN_NAMES['LOAD_TYPE']
+    ])
     
-    # Format change points
-    change_points = results.get('change_points', {})
-    for feature, points in change_points.items():
-        if points:
-            formatted_results.append({
-                'Date': 'Specific Dates',
-                'Issue': 'Sudden Changes Detected',
-                'Explanation': f"Sudden changes were detected in {feature}. This could indicate equipment changes, maintenance events, or changes in operating procedures."
-            })
-    
-    # Format relationships
-    relationships = results.get('relationships', {})
-    weak_relationships = [f for f, v in relationships.items() if v < 0.3]
-    if weak_relationships:
-        formatted_results.append({
-            'Date': 'Overall Analysis',
-            'Issue': 'Unexpected Data Relationships',
-            'Explanation': f"The following factors show weaker than expected influence on fuel consumption: {', '.join(weak_relationships)}. This might indicate data quality issues or unusual operating conditions."
-        })
-    
-    return formatted_results
+    # If the dataframe is empty after dropping critical NaNs, return it as is
+    if df.shape[0] == 0:
+        return df
 
-# Example usage in streamlit_app.py
-# if st.button('Validate Data'):
-#     engine = get_db_engine()
-#     try:
-#         # Fetch all vessel names
-#         vessel_names_query = "SELECT DISTINCT {} FROM sf_consumption_logs".format(COLUMN_NAMES['VESSEL_NAME'])
-#         vessel_names = pd.read_sql_query(vessel_names_query, engine)[COLUMN_NAMES['VESSEL_NAME']].tolist()
-#         
-#         # Calculate date filter (3 months ago from today)
-#         three_months_ago = pd.Timestamp.now() - pd.DateOffset(months=3)
-#         
-#         all_validation_results = []
-#         for vessel_name in vessel_names:
-#             vessel_results = run_advanced_validation(engine, vessel_name, three_months_ago)
-#             all_validation_results.append(vessel_results)
-#         
-#         if any(results['issues'] for results in all_validation_results):
-#             result_df = pd.DataFrame([
-#                 {'Vessel Name': results['vessel_name'], **issue}
-#                 for results in all_validation_results
-#                 for issue in results['issues']
-#             ])
-#             st.write("Validation Results:")
-#             st.dataframe(result_df)
-#             
-#             csv = result_df.to_csv(index=False)
-#             st.download_button(label="Download validation report as CSV", data=csv, file_name='validation_report.csv', mime='text/csv')
-#         else:
-#             st.write("All data passed the validation checks!")
-#     
-#     except Exception as e:
-#         st.error(f"An error occurred: {str(e)}")
+    # Convert categorical columns to numeric codes
+    df[COLUMN_NAMES['VESSEL_ACTIVITY']] = pd.Categorical(df[COLUMN_NAMES['VESSEL_ACTIVITY']]).codes
+    df[COLUMN_NAMES['LOAD_TYPE']] = pd.Categorical(df[COLUMN_NAMES['LOAD_TYPE']]).codes
+
+    # Scale numeric columns
+    numeric_columns = [
+        COLUMN_NAMES['ME_CONSUMPTION'], COLUMN_NAMES['OBSERVERD_DISTANCE'], COLUMN_NAMES['SPEED'],
+        COLUMN_NAMES['DISPLACEMENT'], COLUMN_NAMES['STEAMING_TIME_HRS'], COLUMN_NAMES['WINDFORCE']
+    ]
+    scaler = RobustScaler()
+    if df[numeric_columns].shape[0] > 0:
+        df.loc[:, numeric_columns] = scaler.fit_transform(df[numeric_columns])
+
+    return df
