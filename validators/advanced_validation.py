@@ -55,7 +55,7 @@ def run_advanced_validation(engine, vessel_name, date_filter):
     anomalies = detect_anomalies(test_df)
 
     # Drift Detection using KS Test
-    drift = detect_drift(train_df, test_df)
+    drift = detect_drift(train_df, test_df, test_df[COLUMN_NAMES['REPORT_DATE']])
 
     # Change Point Detection using Ruptures
     change_points = detect_change_points(test_df)
@@ -72,31 +72,43 @@ def run_advanced_validation(engine, vessel_name, date_filter):
         'relationships': relationships if relationships else {}
     }
 
+    # Detailed Reporting for Layman
     for index, row in anomalies.iterrows():
+        features_with_issues = [k for k, v in row.to_dict().items() if v == -1]
         validation_results.append({
             'Vessel Name': str(vessel_name),
             'Report Date': row[COLUMN_NAMES['REPORT_DATE']].strftime('%Y-%m-%d'),
             'Issue Type': 'Anomaly Detected',
-            'Details': f"Anomalous values detected in features: {', '.join([k for k, v in row.to_dict().items() if v == -1])}"
+            'Details': f"Anomalous values detected in the following parameters: {', '.join(features_with_issues)}. "
+                       f"These anomalies suggest unexpected behavior in the vessel's performance data on this date."
         })
-    for feature, has_drift in drift.items():
-        if has_drift:
+
+    for feature, drift_info in drift.items():
+        if drift_info['has_drift']:
             validation_results.append({
                 'Vessel Name': str(vessel_name),
-                'Report Date': 'Multiple Dates',
+                'Report Date': drift_info['date'],
                 'Issue Type': 'Drift Detected',
-                'Details': f"Significant drift detected in feature: {feature}"
-            })
-    for feature, points in change_points.items():
-        if points:
-            validation_results.append({
-                'Vessel Name': str(vessel_name),
-                'Report Date': 'Multiple Dates',
-                'Issue Type': 'Change Point Detected',
-                'Details': f"Change points detected in feature: {feature} at data points {points}"
+                'Details': f"Significant drift detected in feature: {feature} on {drift_info['date']}. Reason: Distribution has changed significantly (p-value: {drift_info['p_value']:.4f})."
             })
 
-    return results
+    for feature, points in change_points.items():
+        if points:
+            change_dates = [test_df.iloc[point][COLUMN_NAMES['REPORT_DATE']].strftime('%Y-%m-%d') for point in points if point < len(test_df)]
+            validation_results.append({
+                'Vessel Name': str(vessel_name),
+                'Report Date': ', '.join(change_dates),
+                'Issue Type': 'Change Point Detected',
+                'Details': f"Significant changes were observed in the '{feature}' parameter on the following dates: {', '.join(change_dates)}. "
+                           f"This might be due to operational adjustments or shifts in vessel performance."
+            })
+
+    # Convert validation results to a more user-friendly format
+    user_friendly_results = []
+    for result in validation_results:
+        user_friendly_results.append(f"Vessel: {result['Vessel Name']}, Date: {result['Report Date']}, Issue: {result['Issue Type']}, Details: {result['Details']}")
+
+    return {'validation_results': user_friendly_results}
 
 def detect_anomalies(df, n_neighbors=20):
     # Handle missing values by dropping rows with NaN values
@@ -119,7 +131,7 @@ def detect_anomalies(df, n_neighbors=20):
     anomalies = df[(lof_anomalies == -1) | (iso_forest_anomalies == -1)]
     return anomalies if not anomalies.empty else pd.DataFrame()
 
-def detect_drift(train_df, test_df):
+def detect_drift(train_df, test_df, dates):
     features = [
         COLUMN_NAMES['ME_CONSUMPTION'], COLUMN_NAMES['OBSERVERD_DISTANCE'], COLUMN_NAMES['SPEED'],
         COLUMN_NAMES['DISPLACEMENT'], COLUMN_NAMES['STEAMING_TIME_HRS'], COLUMN_NAMES['WINDFORCE']
@@ -128,7 +140,11 @@ def detect_drift(train_df, test_df):
     drift_detected = {}
     for feature in features:
         ks_stat, p_value = ks_2samp(train_df[feature], test_df[feature])
-        drift_detected[feature] = p_value < 0.05  # Drift if p-value is below threshold
+        drift_detected[feature] = {
+            'has_drift': p_value < 0.05,  # Drift if p-value is below threshold
+            'p_value': p_value,
+            'date': dates.iloc[-1].strftime('%Y-%m-%d') if p_value < 0.05 else 'N/A'
+        }
 
     return drift_detected
 
