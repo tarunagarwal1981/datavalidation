@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from sklearn.ensemble import IsolationForest
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.feature_selection import mutual_info_regression
@@ -44,7 +45,7 @@ def run_advanced_validation(engine, vessel_name, date_filter):
     # If test_df is empty after preprocessing, return empty results
     if test_df.shape[0] == 0:
         return {
-            'validation_results': validation_results,
+            'validation_results': [],
             'anomalies': pd.DataFrame(),
             'drift': {},
             'change_points': {},
@@ -63,15 +64,6 @@ def run_advanced_validation(engine, vessel_name, date_filter):
     # Feature Relationships using Mutual Information
     relationships = validate_relationships(train_df)
 
-    # Ensure that the return value is a dictionary with all expected keys
-    results = {
-        'validation_results': validation_results,
-        'anomalies': anomalies if not anomalies.empty else pd.DataFrame(),
-        'drift': drift if drift else {},
-        'change_points': change_points if change_points else {},
-        'relationships': relationships if relationships else {}
-    }
-
     # Detailed Reporting for Layman
     for index, row in anomalies.iterrows():
         features_with_issues = [k for k, v in row.to_dict().items() if v == -1]
@@ -89,7 +81,8 @@ def run_advanced_validation(engine, vessel_name, date_filter):
                 'Vessel Name': str(vessel_name),
                 'Report Date': drift_info['date'],
                 'Issue Type': 'Drift Detected',
-                'Details': f"Significant drift detected in feature: {feature} on {drift_info['date']}. Reason: Distribution has changed significantly (p-value: {drift_info['p_value']:.4f})."
+                'Details': f"Significant drift detected in feature: {feature} on {drift_info['date']}. "
+                           f"Reason: Distribution has changed significantly (p-value: {drift_info['p_value']:.4f})."
             })
 
     for feature, points in change_points.items():
@@ -106,11 +99,18 @@ def run_advanced_validation(engine, vessel_name, date_filter):
     # Convert validation results to a more user-friendly format
     user_friendly_results = []
     for result in validation_results:
-        user_friendly_results.append(f"Vessel: {result['Vessel Name']}, Date: {result['Report Date']}, Issue: {result['Issue Type']}, Details: {result['Details']}")
+        user_friendly_results.append(f"Vessel: {result['Vessel Name']}, Date: {result['Report Date']}, "
+                                     f"Issue: {result['Issue Type']}, Details: {result['Details']}")
 
-    return {'validation_results': user_friendly_results}
+    return {
+        'validation_results': user_friendly_results,
+        'anomalies': anomalies,
+        'drift': drift,
+        'change_points': change_points,
+        'relationships': relationships
+    }
 
-def detect_anomalies(df, n_neighbors=20):
+def detect_anomalies(df, n_neighbors=20, contamination=0.1):
     # Handle missing values by dropping rows with NaN values
     df = df.dropna()
     if df.shape[0] == 0:
@@ -122,14 +122,17 @@ def detect_anomalies(df, n_neighbors=20):
         COLUMN_NAMES['VESSEL_ACTIVITY'], COLUMN_NAMES['LOAD_TYPE']
     ]
 
-    lof = LocalOutlierFactor(n_neighbors=n_neighbors, contamination=0.1)
-    lof_anomalies = lof.fit_predict(df[features]) if df[features].shape[0] > 0 else []
+    lof = LocalOutlierFactor(n_neighbors=n_neighbors, contamination=contamination)
+    iso_forest = IsolationForest(contamination=contamination, random_state=42)
 
-    iso_forest = IsolationForest(contamination=0.1, random_state=42)
-    iso_forest_anomalies = iso_forest.fit_predict(df[features]) if df[features].shape[0] > 0 else []
+    lof_anomalies = lof.fit_predict(df[features])
+    iso_forest_anomalies = iso_forest.fit_predict(df[features])
 
-    anomalies = df[(lof_anomalies == -1) | (iso_forest_anomalies == -1)]
-    return anomalies if not anomalies.empty else pd.DataFrame()
+    anomalies = df[(lof_anomalies == -1) | (iso_forest_anomalies == -1)].copy()
+    for feature in features:
+        anomalies[f"{feature}_anomaly"] = ((lof_anomalies == -1) | (iso_forest_anomalies == -1)).astype(int)
+
+    return anomalies
 
 def detect_drift(train_df, test_df, dates):
     features = [
@@ -184,6 +187,9 @@ def validate_relationships(df):
     return relationships
 
 def preprocess_data(df):
+    # Create a copy of the DataFrame to avoid SettingWithCopyWarning
+    df = df.copy()
+    
     # Convert columns to appropriate data types
     df[COLUMN_NAMES['VESSEL_NAME']] = df[COLUMN_NAMES['VESSEL_NAME']].astype(str)
     df[COLUMN_NAMES['VESSEL_ACTIVITY']] = df[COLUMN_NAMES['VESSEL_ACTIVITY']].astype(str)
@@ -195,11 +201,12 @@ def preprocess_data(df):
     df = df.fillna(df.select_dtypes(include=['number']).mean())  # Impute numeric columns only with column mean
     
     # Handle missing values by dropping rows with NaNs in critical columns
-    df = df.dropna(subset=[
+    critical_columns = [
         COLUMN_NAMES['ME_CONSUMPTION'], COLUMN_NAMES['OBSERVERD_DISTANCE'], COLUMN_NAMES['SPEED'],
         COLUMN_NAMES['DISPLACEMENT'], COLUMN_NAMES['STEAMING_TIME_HRS'], COLUMN_NAMES['WINDFORCE'],
         COLUMN_NAMES['VESSEL_ACTIVITY'], COLUMN_NAMES['LOAD_TYPE']
-    ])
+    ]
+    df = df.dropna(subset=critical_columns)
     
     # If the dataframe is empty after dropping critical NaNs, return it as is
     if df.shape[0] == 0:
@@ -219,3 +226,32 @@ def preprocess_data(df):
         df.loc[:, numeric_columns] = scaler.fit_transform(df[numeric_columns])
 
     return df
+
+# Example usage in streamlit_app.py
+# if st.button('Validate Data'):
+#     engine = get_db_engine()
+#     try:
+#         # Fetch all vessel names
+#         vessel_names_query = "SELECT DISTINCT {} FROM sf_consumption_logs".format(COLUMN_NAMES['VESSEL_NAME'])
+#         vessel_names = pd.read_sql_query(vessel_names_query, engine)[COLUMN_NAMES['VESSEL_NAME']].tolist()
+#         
+#         # Calculate date filter (3 months ago from today)
+#         three_months_ago = pd.Timestamp.now() - pd.DateOffset(months=3)
+#         
+#         all_validation_results = []
+#         for vessel_name in vessel_names:
+#             vessel_results = run_advanced_validation(engine, vessel_name, three_months_ago)
+#             all_validation_results.extend(vessel_results['validation_results'])
+#         
+#         if all_validation_results:
+#             result_df = pd.DataFrame(all_validation_results)
+#             st.write("Validation Results:")
+#             st.dataframe(result_df)
+#             
+#             csv = result_df.to_csv(index=False)
+#             st.download_button(label="Download validation report as CSV", data=csv, file_name='validation_report.csv', mime='text/csv')
+#         else:
+#             st.write("All data passed the validation checks!")
+#     
+#     except Exception as e:
+#         st.error(f"An error occurred: {str(e)}")
