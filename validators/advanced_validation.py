@@ -23,7 +23,6 @@ COLUMN_NAMES = {
 }
 
 def run_advanced_validation(engine, vessel_name, date_filter):
-    validation_results = []
     # Fetch data for the vessel
     query = """
     SELECT * FROM sf_consumption_logs
@@ -31,19 +30,29 @@ def run_advanced_validation(engine, vessel_name, date_filter):
     """.format(COLUMN_NAMES['VESSEL_NAME'], COLUMN_NAMES['REPORT_DATE'])
     df = pd.read_sql_query(query, engine, params=(vessel_name, date_filter))
 
+    # If df is empty, return empty results
+    if df.empty:
+        return {
+            'validation_results': [],
+            'anomalies': pd.DataFrame(),
+            'drift': {},
+            'change_points': {},
+            'relationships': {}
+        }
+
     # Split data into training (first 6 months) and validation (last 6 months)
-    df[COLUMN_NAMES['REPORT_DATE']] = pd.to_datetime(df[COLUMN_NAMES['REPORT_DATE']])
+    df.loc[:, COLUMN_NAMES['REPORT_DATE']] = pd.to_datetime(df[COLUMN_NAMES['REPORT_DATE']])
     df = df.sort_values(by=COLUMN_NAMES['REPORT_DATE'])
     mid_point = len(df) // 2
-    train_df = df.iloc[:mid_point]
-    test_df = df.iloc[mid_point:]
+    train_df = df.iloc[:mid_point].copy()
+    test_df = df.iloc[mid_point:].copy()
 
     # Preprocess training and validation data separately to avoid data leakage
     train_df = preprocess_data(train_df)
     test_df = preprocess_data(test_df)
 
     # If test_df is empty after preprocessing, return empty results
-    if test_df.shape[0] == 0:
+    if test_df.empty:
         return {
             'validation_results': [],
             'anomalies': pd.DataFrame(),
@@ -65,15 +74,17 @@ def run_advanced_validation(engine, vessel_name, date_filter):
     relationships = validate_relationships(train_df)
 
     # Detailed Reporting for Layman
-    for index, row in anomalies.iterrows():
-        features_with_issues = [k for k, v in row.to_dict().items() if v == -1]
-        validation_results.append({
-            'Vessel Name': str(vessel_name),
-            'Report Date': row[COLUMN_NAMES['REPORT_DATE']].strftime('%Y-%m-%d'),
-            'Issue Type': 'Anomaly Detected',
-            'Details': f"Anomalous values detected in the following parameters: {', '.join(features_with_issues)}. "
-                       f"These anomalies suggest unexpected behavior in the vessel's performance data on this date."
-        })
+    validation_results = []
+    if not anomalies.empty:
+        for _, row in anomalies.iterrows():
+            features_with_issues = [k for k, v in row.items() if k.endswith('_anomaly') and v == 1]
+            validation_results.append({
+                'Vessel Name': str(vessel_name),
+                'Report Date': row[COLUMN_NAMES['REPORT_DATE']].strftime('%Y-%m-%d'),
+                'Issue Type': 'Anomaly Detected',
+                'Details': f"Anomalous values detected in the following parameters: {', '.join(features_with_issues)}. "
+                           f"These anomalies suggest unexpected behavior in the vessel's performance data on this date."
+            })
 
     for feature, drift_info in drift.items():
         if drift_info['has_drift']:
@@ -97,10 +108,11 @@ def run_advanced_validation(engine, vessel_name, date_filter):
             })
 
     # Convert validation results to a more user-friendly format
-    user_friendly_results = []
-    for result in validation_results:
-        user_friendly_results.append(f"Vessel: {result['Vessel Name']}, Date: {result['Report Date']}, "
-                                     f"Issue: {result['Issue Type']}, Details: {result['Details']}")
+    user_friendly_results = [
+        f"Vessel: {result['Vessel Name']}, Date: {result['Report Date']}, "
+        f"Issue: {result['Issue Type']}, Details: {result['Details']}"
+        for result in validation_results
+    ]
 
     return {
         'validation_results': user_friendly_results,
@@ -111,9 +123,10 @@ def run_advanced_validation(engine, vessel_name, date_filter):
     }
 
 def detect_anomalies(df, n_neighbors=20, contamination=0.1):
+    df = df.copy()
     # Handle missing values by dropping rows with NaN values
     df = df.dropna()
-    if df.shape[0] == 0:
+    if df.empty:
         return pd.DataFrame()  # Return an empty DataFrame if no rows are left after dropping NaNs
 
     features = [
@@ -130,7 +143,7 @@ def detect_anomalies(df, n_neighbors=20, contamination=0.1):
 
     anomalies = df[(lof_anomalies == -1) | (iso_forest_anomalies == -1)].copy()
     for feature in features:
-        anomalies[f"{feature}_anomaly"] = ((lof_anomalies == -1) | (iso_forest_anomalies == -1)).astype(int)
+        anomalies.loc[:, f"{feature}_anomaly"] = ((lof_anomalies == -1) | (iso_forest_anomalies == -1)).astype(int)
 
     return anomalies
 
@@ -168,7 +181,7 @@ def validate_relationships(df):
     ]
 
     # Check if the dataframe is empty before proceeding
-    if df.shape[0] == 0:
+    if df.empty:
         return {feature: 0.0 for feature in features[1:]}
 
     # Discretize the target feature if necessary to handle non-continuous data
@@ -191,14 +204,15 @@ def preprocess_data(df):
     df = df.copy()
     
     # Convert columns to appropriate data types
-    df[COLUMN_NAMES['VESSEL_NAME']] = df[COLUMN_NAMES['VESSEL_NAME']].astype(str)
-    df[COLUMN_NAMES['VESSEL_ACTIVITY']] = df[COLUMN_NAMES['VESSEL_ACTIVITY']].astype(str)
-    df[COLUMN_NAMES['LOAD_TYPE']] = df[COLUMN_NAMES['LOAD_TYPE']].astype(str)
-    df[COLUMN_NAMES['REPORT_DATE']] = pd.to_datetime(df[COLUMN_NAMES['REPORT_DATE']])
+    df.loc[:, COLUMN_NAMES['VESSEL_NAME']] = df[COLUMN_NAMES['VESSEL_NAME']].astype(str)
+    df.loc[:, COLUMN_NAMES['VESSEL_ACTIVITY']] = df[COLUMN_NAMES['VESSEL_ACTIVITY']].astype(str)
+    df.loc[:, COLUMN_NAMES['LOAD_TYPE']] = df[COLUMN_NAMES['LOAD_TYPE']].astype(str)
+    df.loc[:, COLUMN_NAMES['REPORT_DATE']] = pd.to_datetime(df[COLUMN_NAMES['REPORT_DATE']])
     
     # Handle missing values by imputing or dropping
     df = df.dropna(how='all')  # Drop rows where all values are NaN to avoid empty DataFrames
-    df = df.fillna(df.select_dtypes(include=['number']).mean())  # Impute numeric columns only with column mean
+    numeric_columns = df.select_dtypes(include=['number']).columns
+    df.loc[:, numeric_columns] = df[numeric_columns].fillna(df[numeric_columns].mean())
     
     # Handle missing values by dropping rows with NaNs in critical columns
     critical_columns = [
@@ -209,12 +223,12 @@ def preprocess_data(df):
     df = df.dropna(subset=critical_columns)
     
     # If the dataframe is empty after dropping critical NaNs, return it as is
-    if df.shape[0] == 0:
+    if df.empty:
         return df
 
     # Convert categorical columns to numeric codes
-    df[COLUMN_NAMES['VESSEL_ACTIVITY']] = pd.Categorical(df[COLUMN_NAMES['VESSEL_ACTIVITY']]).codes
-    df[COLUMN_NAMES['LOAD_TYPE']] = pd.Categorical(df[COLUMN_NAMES['LOAD_TYPE']]).codes
+    df.loc[:, COLUMN_NAMES['VESSEL_ACTIVITY']] = pd.Categorical(df[COLUMN_NAMES['VESSEL_ACTIVITY']]).codes
+    df.loc[:, COLUMN_NAMES['LOAD_TYPE']] = pd.Categorical(df[COLUMN_NAMES['LOAD_TYPE']]).codes
 
     # Scale numeric columns
     numeric_columns = [
@@ -244,10 +258,11 @@ def preprocess_data(df):
 #             all_validation_results.extend(vessel_results['validation_results'])
 #         
 #         if all_validation_results:
-#             result_df = pd.DataFrame(all_validation_results)
 #             st.write("Validation Results:")
-#             st.dataframe(result_df)
+#             for result in all_validation_results:
+#                 st.write(result)
 #             
+#             result_df = pd.DataFrame(all_validation_results)
 #             csv = result_df.to_csv(index=False)
 #             st.download_button(label="Download validation report as CSV", data=csv, file_name='validation_report.csv', mime='text/csv')
 #         else:
