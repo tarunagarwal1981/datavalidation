@@ -13,6 +13,6 @@ DB_CONFIG = {
 
 def get_db_engine():
     encoded_password = urllib.parse.quote(DB_CONFIG['password'])
-    db_url = f"postgresql+psycopg2://{DB_CONFIG['user']}:{encoded_password}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}"
+    db_url = f"postgresql+psycopg2://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}"
     engine = create_engine(db_url)
     return engine
