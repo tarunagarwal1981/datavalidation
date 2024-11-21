@@ -8,6 +8,7 @@ from validators.distance_validation import validate_distance_data
 from validators.speed_validation import validate_speed, fetch_speed_data
 from validators.fuel_rob_validation import validate_fuel_rob_for_vessel, fetch_sf_consumption_logs
 from validators.advanced_validation import run_advanced_validation  # Import the advanced validation function
+from validators.slip_validation import validate_slip_percentage, fetch_slip_data  # Import Slip Validation
 from database import get_db_engine  # Import the database engine function
 
 st.set_page_config(layout="wide")
@@ -39,6 +40,7 @@ def main():
         observed_distance_check = st.sidebar.checkbox("Observed Distance", value=True, key="observed_distance_check")
         speed_check = st.sidebar.checkbox("Speed", value=True, key="speed_check")
         fuel_rob_check = st.sidebar.checkbox("Fuel ROB", value=True, key="fuel_rob_check")
+        slip_check = st.sidebar.checkbox("Slip Validation", value=True, key="slip_check")  # New: Slip Validation checkbox
 
         # New: Advanced Validation checkbox
         advanced_validation_check = st.sidebar.checkbox("Run Advanced Validations", value=False, key="advanced_validation_check")
@@ -54,12 +56,13 @@ def main():
                 validation_results = []
                 engine = get_db_engine()  # Get the database engine
 
-                if me_consumption_check or ae_consumption_check or boiler_consumption_check or speed_check or fuel_rob_check or advanced_validation_check:
+                if me_consumption_check or ae_consumption_check or boiler_consumption_check or speed_check or fuel_rob_check or slip_check or advanced_validation_check:
                     df = fetch_vessel_performance_data(date_filter)
                     coefficients_df = fetch_vessel_coefficients()
                     hull_performance_df = fetch_hull_performance_data()
                     mcr_df = fetch_mcr_data(date_filter)
                     sf_consumption_logs = fetch_sf_consumption_logs(date_filter)
+                    slip_data = fetch_slip_data(date_filter)  # Fetch data for Slip Validation
 
                     if not df.empty:
                         vessel_groups = list(df.groupby('vessel_name'))
@@ -103,6 +106,10 @@ def main():
                                 if fuel_rob_check:
                                     fuel_rob_failures = validate_fuel_rob_for_vessel(sf_consumption_logs, vessel_name)
                                     failure_reasons.extend([failure['Remarks'] for failure in fuel_rob_failures if failure['Report Date'] == row['reportdate']])
+
+                                if slip_check:  # Slip Validation logic
+                                    slip_failures = validate_slip_percentage(row)
+                                    failure_reasons.extend(slip_failures)
 
                                 if failure_reasons:
                                     validation_results.append({
@@ -171,6 +178,9 @@ def main():
 
         st.markdown("<h3 style='font-size: 14px;'>Observed Distance Validations</h3>", unsafe_allow_html=True)
         st.markdown("...")  # Add content as needed
+
+        st.markdown("<h3 style='font-size: 14px;'>Slip Validations</h3>", unsafe_allow_html=True)
+        st.markdown("This section validates the slip percentage for various vessels.", unsafe_allow_html=True)
 
         st.markdown("<h3 style='font-size: 14px;'>Advanced Validations</h3>", unsafe_allow_html=True)
         st.markdown("""<div style='font-size: 10px;'>
