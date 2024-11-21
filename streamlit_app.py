@@ -55,6 +55,10 @@ def main():
             try:
                 validation_results = []
                 engine = get_db_engine()  # Get the database engine
+                if engine is None:
+                    st.error("Database connection could not be established. Please check your database configuration.")
+                else:
+                    st.write("Database connection established successfully.")
 
                 if me_consumption_check or ae_consumption_check or boiler_consumption_check or speed_check or fuel_rob_check or slip_check or advanced_validation_check:
                     df = fetch_vessel_performance_data(date_filter)
