@@ -1,6 +1,4 @@
 from sqlalchemy import create_engine
-import pandas as pd
-from datetime import datetime, timedelta
 import urllib.parse
 from sqlalchemy.exc import SQLAlchemyError
 import logging
@@ -42,20 +40,8 @@ class DatabaseConnection:
                 raise
         return cls._engine
 
-    @classmethod
-    @contextmanager
-    def get_connection(cls):
-        """
-        Context manager for database connections.
-        Ensures proper handling of connections and error reporting.
-        """
-        engine = cls.get_db_engine()
-        if engine is None:
-            raise RuntimeError("Could not establish database connection")
-        
-        try:
-            with engine.connect() as connection:
-                yield connection
-        except SQLAlchemyError as e:
-            logger.error(f"Database error occurred: {str(e)}")
-            raise
+def get_db_engine():
+    """
+    Wrapper function for backward compatibility with existing validators
+    """
+    return DatabaseConnection.get_db_engine()
