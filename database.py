@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 import urllib.parse
 from sqlalchemy.exc import SQLAlchemyError
 import logging
@@ -32,7 +32,8 @@ class DatabaseConnection:
                 cls._engine = create_engine(db_url, pool_pre_ping=True)
                 # Test the connection
                 with cls._engine.connect() as conn:
-                    conn.execute("SELECT 1")
+                    conn.execute(text("SELECT 1"))
+                    conn.commit()
                 logger.info("Database connection established successfully")
             except SQLAlchemyError as e:
                 logger.error(f"Failed to create database engine: {str(e)}")
