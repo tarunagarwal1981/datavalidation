@@ -74,17 +74,17 @@ def setup_sidebar():
         
         return date_filter, settings
 
-def fetch_data(engine, date_filter):
+def fetch_data(date_filter):
     """Fetch all required data from database"""
     try:
         with st.spinner('Fetching data...'):
             data = {
-                'vessel_performance': me_validator.fetch_vessel_performance_data(engine, date_filter),
-                'coefficients': me_validator.fetch_vessel_coefficients(engine),
-                'hull_performance': me_validator.fetch_hull_performance_data(engine),
-                'mcr': boiler_validator.fetch_mcr_data(engine, date_filter),
-                'sf_consumption': fuel_validator.fetch_sf_consumption_logs(engine, date_filter),
-                'slip': slip_validator.fetch_slip_data(engine, date_filter)
+                'vessel_performance': me_validator.fetch_vessel_performance_data(date_filter),
+                'coefficients': me_validator.fetch_vessel_coefficients(),
+                'hull_performance': me_validator.fetch_hull_performance_data(),
+                'mcr': boiler_validator.fetch_mcr_data(date_filter),
+                'sf_consumption': fuel_validator.fetch_sf_consumption_logs(date_filter),
+                'slip': slip_validator.fetch_slip_data(date_filter)
             }
             
             if data['vessel_performance'].empty:
@@ -238,7 +238,7 @@ def run_validation(engine, data, settings, date_filter):
         try:
             with st.spinner('Running distance validation...'):
                 distance_results = distance_validator.validate_distance_data(
-                    engine, date_filter, settings['batch_size']
+                    date_filter, settings['batch_size']
                 )
                 if not distance_results.empty:
                     validation_results.extend(distance_results.to_dict('records'))
@@ -281,7 +281,7 @@ def main():
                 return
 
             # Fetch required data
-            data = fetch_data(engine, date_filter)
+            data = fetch_data(date_filter)
             if data is None:
                 return
 
