@@ -1,8 +1,8 @@
 streamlit
-pandas
-psycopg2-binary 
+pandas 
 openpyxl 
 matplotlib
-sqlalchemy
+sqlalchemy==2.0.23 
+psycopg2-binary==2.9.9
 scikit-learn
 ruptures
